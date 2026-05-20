@@ -1,22 +1,14 @@
-import streamlit as st
-import pandas as pd
-import datetime
-import re
-import math
-
-#logo - vrchná časť aplikácie -úvod
-col_logo, col_title = st.columns([1, 5])
-with col_logo:
-    try: st.image("logo.png", width=130)
-    except: st.write("🖼️ Logo")
-with col_title:
-    st.title("MEC Calculation")
-st.divider()
-
-import streamlit as st
+mport streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+
+# --- 1. KONFIGURÁCIA STRÁNKY ---
+st.set_page_config(
+    page_title="MECASYS - Predikcia času",
+    page_icon="⚙️",
+    layout="centered"
+)
 
 # --- 2. NAČÍTANIE MODELU A ENCODERA ---
 @st.cache_resource
