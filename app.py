@@ -154,5 +154,185 @@ if tvar == "KR":
 
 st.divider()
 
+# ============================
+# LOAD SEMI-FINISHED PRODUCTS (HÁROK 1)
+# ============================
+
+POL_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQf4EiqZt1grkazJgfYWVhG0M8FGLNCjaGk6dcXhO3r04JQuZ9Qxv1jelDo3c8hBLy7Ny5C1pZqvbfS/pub?gid=0&single=true&output=csv"
+
+@st.cache_data
+def load_polotovary():
+    df = pd.read_csv(POL_URL)
+    df.columns = df.columns.str.lower().str.strip()
+    return df
+
+df_pol = load_polotovary()
+
+st.subheader("Výber materiálu a polotovaru")
+
+# ============================
+# RIADOK 3 – Materiál • Akosť • Polotovar • Cena/bm • Cena/ks
+# ============================
+
+col1, col2, col3, col4, col5 = st.columns([1.2, 1.6, 2.4, 1.2, 1.2])
+
+# --- 1. Materiál ---
+with col1:
+    material_list = sorted(df_pol["material"].dropna().unique().tolist())
+    material = st.selectbox("Materiál", material_list, key="mat_select")
+
+# --- 2. Akosť ---
+with col2:
+    akosti = sorted(df_pol[df_pol["material"] == material]["akost"].dropna().unique().tolist())
+    akost_vyber = st.multiselect("Akosť", akosti, key="akost_select")
+
+# --- 3. Polotovar ---
+with col3:
+
+    df_filtered = df_pol[df_pol["akost"].isin(akost_vyber)]
+
+    # filter podľa tvaru položky (z riadku 2)
+    if tvar == "KR":
+        df_filtered = df_filtered[df_filtered["tvar"].isin(["KR", "6HR", "TR"])]
+
+    polozky = []
+
+    # ak bol práve uložený nový polotovar → vyber ho
+    force_pol = st.session_state.get("force_polotovar", None)
+
+    if df_filtered.empty:
+        st.warning("Pre túto akosť neexistuje žiadny polotovar. Pridaj nový.")
+        polotovar = "+ Pridať nový polotovar"
+        vybrany_pol = None
+
+    else:
+        for _, r in df_filtered.iterrows():
+            nazov = (
+                f"[{r['akost']}] {r['názov']} | "
+                f"{r['rozmer1']}x{r['rozmer2']}x{r['rozmer3']} | "
+                f"Cena: {r['cena']} €/bm"
+            )
+            polozky.append(nazov)
+
+        polozky.append("+ Pridať nový polotovar")
+
+        # ak máme force_polotovar → vyber ho
+        if force_pol and force_pol in polozky:
+            polotovar = st.selectbox("Polotovar", polozky, index=polozky.index(force_pol), key="polotovar_select")
+            st.session_state["force_polotovar"] = None
+        else:
+            polotovar = st.selectbox("Polotovar", polozky, key="polotovar_select")
+
+        if polotovar != "+ Pridať nový polotovar":
+            akost_sel = polotovar.split("]")[0].replace("[", "")
+            vybrany_pol = df_filtered[df_filtered["akost"] == akost_sel].iloc[0]
+        else:
+            vybrany_pol = None
+
+# --- 4. Cena za bm ---
+with col4:
+    if vybrany_pol is not None:
+        cena_bm = float(vybrany_pol["cena"])
+    else:
+        cena_bm = 0.0
+    cena_bm = st.number_input("Cena €/bm", value=cena_bm, disabled=True, key="cena_bm")
+
+# --- 5. Cena materiál / ks ---
+with col5:
+    if vybrany_pol is not None:
+        if tvar == "KR":
+            dlzka_mm = l_mm
+        else:
+            dlzka_mm = dp
+
+        cena_mat_ks = round(cena_bm * (dlzka_mm / 1000), 4)
+    else:
+        cena_mat_ks = 0.0
+
+    st.number_input("Cena mat/ks", value=cena_mat_ks, disabled=True, key="cena_mat_ks")
+
+st.divider()
+
+# ============================
+# BOX – Pridať nový polotovar
+# ============================
+
+if polotovar == "+ Pridať nový polotovar":
+
+    st.markdown("### ➕ Pridať nový polotovar")
+
+    with st.container():
+        box1, box2, box3, box4 = st.columns([1.2, 1.2, 1.2, 1.2])
+        box5, box6, box7, box8 = st.columns([1.2, 1.2, 1.2, 1.2])
+
+        with box1:
+            novy_material = st.selectbox(
+                "Materiál (nový)",
+                material_list,
+                index=material_list.index(material),
+                key="novy_material"
+            )
+
+        with box2:
+            nova_akost = st.text_input(
+                "Akosť (nová)",
+                value=akost_vyber[0] if akost_vyber else "",
+                key="nova_akost"
+            )
+
+        with box3:
+            novy_nazov = st.text_input("Názov (nový)", key="novy_nazov")
+
+        with box4:
+            novy_tvar = st.selectbox("Tvar (nový)", ["STV", "KR", "6HR", "TR"], key="novy_tvar")
+
+        with box5:
+            r1 = st.text_input("Rozmer 1", key="r1_new")
+
+        with box6:
+            r2 = st.text_input("Rozmer 2", key="r2_new")
+
+        with box7:
+            r3 = st.text_input("Rozmer 3", key="r3_new")
+
+        with box8:
+            cena = st.number_input("Cena €/bm", min_value=0.0, step=0.1, key="cena_new")
+
+        ulozit = st.button("Uložiť nový polotovar", key="ulozit_polotovar")
+
+        if ulozit:
+            if novy_material and nova_akost and novy_nazov and novy_tvar and r1 and r2 and r3 and cena:
+
+                payload = {
+                    "Názov": novy_nazov,
+                    "Akost": nova_akost,
+                    "Material": novy_material,
+                    "Cena": cena,
+                    "Tvar": novy_tvar,
+                    "Rozmer1": r1,
+                    "Rozmer2": r2,
+                    "Rozmer3": r3
+                }
+
+                r = requests.post(
+                    "https://script.google.com/macros/s/AKfycbzyZxjTplhk010oq7ozvovAGx5lRx72PjqUvoJUrNazx_jRfq7lqfQgbeHYG9O-NCcX/exec",
+                    json=payload
+                )
+
+                if r.status_code == 200:
+
+                    # vytvoríme formátovaný názov pre automatický výber
+                    new_polotovar_label = f"[{nova_akost}] {novy_nazov} | {r1}x{r2}x{r3} | Cena: {cena} €/bm"
+
+                    st.session_state["force_polotovar"] = new_polotovar_label
+
+                    st.success("Polotovar bol uložený.")
+                    st.cache_data.clear()
+                    st.experimental_rerun()
+
+                else:
+                    st.error("Nepodarilo sa uložiť polotovar.")
+            else:
+                st.error("Vyplň všetky polia.")
 
 
