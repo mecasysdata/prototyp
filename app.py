@@ -45,10 +45,10 @@ with col4:
             disabled=True
         )
     else:
-        krajina_input = None  # bude sa dopĺňať nižšie
+        krajina_input = None  # doplní sa nižšie
 
 # ============================
-# 3. Pridanie nového zákazníka (všetko v jednom riadku)
+# 3. Pridanie nového zákazníka — všetko v JEDNOM RIADKU
 # ============================
 if vybrany == "+ Pridať nového zákazníka":
 
@@ -79,3 +79,8 @@ if vybrany == "+ Pridať nového zákazníka":
                     st.error("Nepodarilo sa uložiť zákazníka.")
             else:
                 st.error("Vyplň všetky polia.")
+
+# ============================
+# Divider pod celým riadkom
+# ============================
+st.divider()
