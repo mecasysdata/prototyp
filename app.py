@@ -442,8 +442,6 @@ hustoty = {
 # RIADOK 4 – všetko vedľa seba
 # ============================
 
-st.subheader("Výpočty – geometria, hustota, hmotnosť, plocha, kooperácia")
-
 col1, col2, col3, col4, col5, col6, col7 = st.columns([1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.4])
 
 # 1) KOOPERÁCIA – ÁNO / NIE
@@ -524,3 +522,5 @@ vstupne_naklady_ks = cena_mat_ks + cena_ks
 with col7:
     st.write("Vstupné €/ks")
     st.write(round(vstupne_naklady_ks, 3))
+
+st.divider()
