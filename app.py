@@ -323,3 +323,5 @@ if polotovar == "+ Pridať nový polotovar":
                 st.error("Vyplň všetky polia.")
 
 
+
+
