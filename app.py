@@ -44,13 +44,15 @@ with col3:
 
 with col4:
     if vybrany != "+ Pridať nového zákazníka":
-        krajina_input = st.text_input(
-            "Krajina zákazníka",
-            df_zak.loc[df_zak["zakaznik"] == vybrany, "krajina"].values[0],
-            disabled=True
-        )
+        # bezpečné – zákazník existuje v tabuľke
+        krajina_input = df_zak.loc[df_zak["zakaznik"] == vybrany, "krajina"]
+        if len(krajina_input) > 0:
+            krajina_input = st.text_input("Krajina zákazníka", krajina_input.values[0], disabled=True)
+        else:
+            krajina_input = st.text_input("Krajina zákazníka", "", disabled=True)
     else:
         krajina_input = None
+
 
 # tieto tri polia sú v TOM ISTOM RIADKU, len sa zobrazia, keď treba
 novy_zak = None
