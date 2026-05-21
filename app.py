@@ -168,11 +168,13 @@ def load_polotovary():
 
 df_pol = load_polotovary()
 
+st.subheader("Výber materiálu a polotovaru")
+
 # ============================
-# RIADOK 3 – Materiál • Akosť • Polotovar
+# RIADOK 3 – Materiál • Akosť • Polotovar • Cena/bm • Cena/ks
 # ============================
 
-col1, col2, col3 = st.columns([1.2, 1.6, 2.4])
+col1, col2, col3, col4, col5 = st.columns([1.2, 1.6, 2.4, 1.2, 1.2])
 
 # --- 1. Materiál ---
 with col1:
@@ -195,10 +197,10 @@ with col3:
 
     polozky = []
 
-    # ak nič nenašlo → automaticky zobrazíme box
     if df_filtered.empty:
         st.warning("Pre túto akosť neexistuje žiadny polotovar. Pridaj nový.")
         polotovar = "+ Pridať nový polotovar"
+        vybrany_pol = None
     else:
         for _, r in df_filtered.iterrows():
             nazov = (
@@ -210,6 +212,35 @@ with col3:
 
         polozky.append("+ Pridať nový polotovar")
         polotovar = st.selectbox("Polotovar", polozky)
+
+        # nájdenie vybraného riadku
+        if polotovar != "+ Pridať nový polotovar":
+            akost_sel = polotovar.split("]")[0].replace("[", "")
+            vybrany_pol = df_filtered[df_filtered["akost"] == akost_sel].iloc[0]
+        else:
+            vybrany_pol = None
+
+# --- 4. Cena za bm ---
+with col4:
+    if vybrany_pol is not None:
+        cena_bm = float(vybrany_pol["cena"])
+    else:
+        cena_bm = 0.0
+    cena_bm = st.number_input("Cena €/bm", value=cena_bm, disabled=True)
+
+# --- 5. Cena materiál / ks ---
+with col5:
+    if vybrany_pol is not None:
+        if tvar == "KR":
+            dlzka_mm = l_mm
+        else:
+            dlzka_mm = dp
+
+        cena_mat_ks = round(cena_bm * (dlzka_mm / 1000), 4)
+    else:
+        cena_mat_ks = 0.0
+
+    st.number_input("Cena mat/ks", value=cena_mat_ks, disabled=True)
 
 st.divider()
 
@@ -278,3 +309,4 @@ if polotovar == "+ Pridať nový polotovar":
                     st.error("Nepodarilo sa uložiť polotovar.")
             else:
                 st.error("Vyplň všetky polia.")
+
