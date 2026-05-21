@@ -160,19 +160,36 @@ with col3:
         key="polotovar_select"
     )
 
+# --- DYNAMICKÉ NASTAVENIE CENY ---
 if polotovar_key != "new":
     r = df_filtered.loc[polotovar_key]
-    cena_bm = float(r["cena"])
+    st.session_state["cena_bm"] = float(r["cena"])
 else:
-    cena_bm = 0.0
+    st.session_state["cena_bm"] = 0.0
 
+# --- VÝPOČET DĹŽKY ---
+dlzka_mm = l_mm if tvar == "KR" else dp
+
+# --- VÝPOČET CENY MATERIÁLU ---
+cena_mat_ks = round(st.session_state["cena_bm"] * (dlzka_mm / 1000), 4)
+
+# --- UI ---
 with col4:
-    st.number_input("Cena €/bm", value=cena_bm, disabled=True, key="cena_bm_in")
+    st.number_input(
+        "Cena €/bm",
+        value=st.session_state["cena_bm"],
+        disabled=True,
+        key="cena_bm_display"
+    )
 
 with col5:
-    dlzka_mm = l_mm if tvar == "KR" else dp
-    cena_mat_ks = round(cena_bm * (dlzka_mm / 1000), 4)
-    st.number_input("Cena mat/ks", value=cena_mat_ks, disabled=True, key="cena_mat_ks_in")
+    st.number_input(
+        "Cena mat/ks",
+        value=cena_mat_ks,
+        disabled=True,
+        key="cena_mat_ks_display"
+    )
+
 
 # ============================
 # BOX – Pridať nový polotovar
