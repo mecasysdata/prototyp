@@ -19,7 +19,7 @@ df_zak = load_customers()
 # ============================
 # 2. UI – Riadok 1 (všetko v jednom riadku)
 # ============================
-col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 1.2, 1, 1.2, 0.8])
+col1, col2, col3, col4 = st.columns([1, 1, 1.2, 1])
 
 # --- 1. Políčko: Dátum ---
 with col1:
@@ -45,18 +45,22 @@ with col4:
             disabled=True
         )
     else:
-        krajina_input = st.text_input("Krajina zákazníka (nový)")
+        krajina_input = None  # bude sa dopĺňať nižšie
 
-# --- 5. Políčko: Názov nového zákazníka (zobrazí sa len vtedy, keď treba) ---
-with col5:
-    if vybrany == "+ Pridať nového zákazníka":
+# ============================
+# 3. Pridanie nového zákazníka (všetko v jednom riadku)
+# ============================
+if vybrany == "+ Pridať nového zákazníka":
+
+    colA, colB, colC = st.columns([1.2, 1, 0.8])
+
+    with colA:
         novy_zak = st.text_input("Nový zákazník")
-    else:
-        novy_zak = None
 
-# --- 6. Tlačidlo Uložiť zákazníka (tiež len vtedy, keď treba) ---
-with col6:
-    if vybrany == "+ Pridať nového zákazníka":
+    with colB:
+        krajina_input = st.text_input("Krajina zákazníka")
+
+    with colC:
         if st.button("Uložiť"):
             if novy_zak and krajina_input:
                 payload = {
