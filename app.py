@@ -54,9 +54,12 @@ if "force_customer" in st.session_state:
 # RIADOK 1
 # ============================
 col1, col2, col3, col4, col5, col6, col7 = st.columns([1.2, 1.2, 1.6, 1.2, 1.6, 1.2, 0.8])
-with col1: date = st.date_input("Dátum", datetime.date.today())
-with col2: cp_nazov = st.text_input("Označenie CP")
-with col3: vybrany = st.selectbox("Zákazník", zakaznici, index=default_index)
+with col1:
+    date = st.date_input("Dátum", datetime.date.today())
+with col2:
+    cp_nazov = st.text_input("Označenie CP")
+with col3:
+    vybrany = st.selectbox("Zákazník", zakaznici, index=default_index)
 with col4:
     krajina_input = ""
     if vybrany != "+ Pridať nového zákazníka":
@@ -65,8 +68,10 @@ with col4:
     st.text_input("Krajina zákazníka", krajina_input, disabled=True)
 
 if vybrany == "+ Pridať nového zákazníka":
-    with col5: novy_zak = st.text_input("Nový zákazník")
-    with col6: nova_krajina = st.text_input("Krajina nového zákazníka")
+    with col5:
+        novy_zak = st.text_input("Nový zákazník")
+    with col6:
+        nova_krajina = st.text_input("Krajina nového zákazníka")
     with col7:
         if st.button("Uložiť"):
             if novy_zak and nova_krajina:
@@ -75,7 +80,8 @@ if vybrany == "+ Pridať nového zákazníka":
                     st.session_state["force_customer"] = novy_zak
                     st.cache_data.clear()
                     st.rerun()
-                else: st.error("Chyba")
+                else:
+                    st.error("Chyba")
 
 st.divider()
 
@@ -83,20 +89,29 @@ st.divider()
 # RIADOK 2 – ITEM + STV/KR
 # ============================
 col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns([1.6, 1, 1, 1, 1, 1, 1, 1, 1])
-with col1: item = st.text_input("ITEM")
-with col2: pocet_kusov = st.number_input("Počet kusov", min_value=1, step=1)
-with col3: narocnost = st.selectbox("Náročnosť", [1, 2, 3, 4, 5])
-with col4: tvar = st.selectbox("Tvar položky", ["STV", "KR"])
+with col1:
+    item = st.text_input("ITEM")
+with col2:
+    pocet_kusov = st.number_input("Počet kusov", min_value=1, step=1)
+with col3:
+    narocnost = st.selectbox("Náročnosť", [1, 2, 3, 4, 5])
+with col4:
+    tvar = st.selectbox("Tvar položky", ["STV", "KR"])
 
 dp = s = v = 0.0
 d_mm = l_mm = 0.0
 if tvar == "STV":
-    with col5: dp = st.number_input("D/P (mm)", min_value=0.0, step=0.1)
-    with col6: s = st.number_input("S (mm)", min_value=0.0, step=0.1)
-    with col7: v = st.number_input("V (mm)", min_value=0.0, step=0.1)
+    with col5:
+        dp = st.number_input("D/P (mm)", min_value=0.0, step=0.1)
+    with col6:
+        s = st.number_input("S (mm)", min_value=0.0, step=0.1)
+    with col7:
+        v = st.number_input("V (mm)", min_value=0.0, step=0.1)
 else:
-    with col5: d_mm = st.number_input("D (mm)", min_value=0.0, step=0.1)
-    with col6: l_mm = st.number_input("L (mm)", min_value=0.0, step=0.1)
+    with col5:
+        d_mm = st.number_input("D (mm)", min_value=0.0, step=0.1)
+    with col6:
+        l_mm = st.number_input("L (mm)", min_value=0.0, step=0.1)
 
 st.divider()
 
@@ -104,11 +119,14 @@ st.divider()
 # LOAD POLOTOVARY
 # ============================
 POL_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQf4EiqZt1grkazJgfYWVhG0M8FGLNCjaGk6dcXhO3r04JQuZ9Qxv1jelDo3c8hBLy7Ny5C1pZqvbfS/pub?gid=0&single=true&output=csv"
+
+
 @st.cache_data
 def load_polotovary():
     df = pd.read_csv(POL_URL)
     df.columns = df.columns.str.lower().str.strip()
     return df
+
 
 df_pol = load_polotovary()
 
@@ -129,7 +147,6 @@ with col3:
     if tvar == "KR":
         df_filtered = df_filtered[df_filtered["tvar"].isin(["KR", "6HR", "TR"])]
 
-    # --- NOVÁ LOGIKA: selectbox vracia index riadku ---
     polozky_dict = {
         idx: f"[{r['akost']}] {r['názov']} | {r['rozmer1']}x{r['rozmer2']}x{r['rozmer3']} | Cena: {r['cena']} €/bm"
         for idx, r in df_filtered.iterrows()
@@ -143,7 +160,6 @@ with col3:
         key="polotovar_select"
     )
 
-# --- VÝPOČET CIEN ---
 if polotovar_key != "new":
     r = df_filtered.loc[polotovar_key]
     cena_bm = float(r["cena"])
@@ -162,8 +178,9 @@ with col5:
 # BOX – Pridať nový polotovar
 # ============================
 
-if polotovar_key == "new":
+material_list = sorted(df_pol["material"].dropna().unique().tolist())
 
+if polotovar_key == "new":
 
     st.markdown("### ➕ Pridať nový polotovar")
 
@@ -247,11 +264,13 @@ if polotovar_key == "new":
 
 KOOP_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRXlw1ybqaKDNFzTXEBQXtyZDSrLeauZ6l_1jZGuq5_KU8RPjrz4M_B5RGIAF9XTca8mSCSflH6pZE8/pub?gid=1711993868&single=true&output=csv"
 
+
 @st.cache_data
 def load_kooperacie():
     df = pd.read_csv(KOOP_URL)
     df.columns = df.columns.str.lower().str.strip()
     return df
+
 
 df_kooperacie = load_kooperacie()
 
@@ -281,7 +300,25 @@ def urci_subcategory(akost, material, nazov_materialu):
         if ak.startswith(prefix):
             return sub
 
-    if ak.startswith(("1.00", "1.01", "1.02", "1.03", "1.04", "1.05", "1.06", "1.07", "1.08", "1.09", "1.10", "1.11", "1.12", "1.13", "1.14")):
+    if ak.startswith(
+        (
+            "1.00",
+            "1.01",
+            "1.02",
+            "1.03",
+            "1.04",
+            "1.05",
+            "1.06",
+            "1.07",
+            "1.08",
+            "1.09",
+            "1.10",
+            "1.11",
+            "1.12",
+            "1.13",
+            "1.14",
+        )
+    ):
         return "UNALL"
 
     if ak.startswith("1.43") or ak.startswith("1.44") or ak.startswith("1.45"):
@@ -296,9 +333,53 @@ def urci_subcategory(akost, material, nazov_materialu):
         return "STAIN-SPEC"
     if ak.startswith(("1.33", "1.34", "1.35", "1.36", "1.37", "1.38")):
         return "HSS"
-    if ak.startswith(("1.20", "1.21", "1.22", "1.23", "1.24", "1.25", "1.26", "1.27", "1.28", "1.29", "1.30", "1.31", "1.32")):
+    if ak.startswith(
+        (
+            "1.20",
+            "1.21",
+            "1.22",
+            "1.23",
+            "1.24",
+            "1.25",
+            "1.26",
+            "1.27",
+            "1.28",
+            "1.29",
+            "1.30",
+            "1.31",
+            "1.32",
+        )
+    ):
         return "TOOL"
-    if ak.startswith(("1.65", "1.66", "1.67", "1.68", "1.69", "1.70", "1.71", "1.72", "1.73", "1.74", "1.75", "1.76", "1.77", "1.78", "1.79", "1.80", "1.81", "1.82", "1.83", "1.84", "1.85", "1.86", "1.87", "1.88", "1.89")):
+    if ak.startswith(
+        (
+            "1.65",
+            "1.66",
+            "1.67",
+            "1.68",
+            "1.69",
+            "1.70",
+            "1.71",
+            "1.72",
+            "1.73",
+            "1.74",
+            "1.75",
+            "1.76",
+            "1.77",
+            "1.78",
+            "1.79",
+            "1.80",
+            "1.81",
+            "1.82",
+            "1.83",
+            "1.84",
+            "1.85",
+            "1.86",
+            "1.87",
+            "1.88",
+            "1.89",
+        )
+    ):
         return "ALLOYED"
 
     plast_map = {
@@ -313,7 +394,7 @@ def urci_subcategory(akost, material, nazov_materialu):
         "RUBBER": "RUBBER",
         "PA": "PA",
         "PP": "PP",
-        "PE": "PE"
+        "PE": "PE",
     }
 
     naz = nazov_materialu.upper()
@@ -330,12 +411,37 @@ def urci_subcategory(akost, material, nazov_materialu):
 
 
 hustoty = {
-    "UNALL": 7900, "LOWAL": 7900, "ALLOYED": 7900, "TOOL": 7900, "HSS": 7900,
-    "AUST": 8000, "MART": 8000, "DUPX": 8000, "FERR": 8000, "STAIN-SPEC": 8000,
-    "CU": 9000, "BRASS": 9000, "BRONZE": 9000, "ALU": 2900, "TI": 4500, "NI-SPEC": 8500,
-    "POM": 1500, "PE": 1000, "PA": 1200, "PP": 1000, "PEEK": 1400, "PET": 1700,
-    "PC": 1500, "PVC": 1700, "PTFE": 3000, "PUR": 2000, "PMMA": 1600, "RUBBER": 7900,
-    "CAST-GG": 7150, "CAST-GGG": 7250, "CAST-TEMP": 7400
+    "UNALL": 7900,
+    "LOWAL": 7900,
+    "ALLOYED": 7900,
+    "TOOL": 7900,
+    "HSS": 7900,
+    "AUST": 8000,
+    "MART": 8000,
+    "DUPX": 8000,
+    "FERR": 8000,
+    "STAIN-SPEC": 8000,
+    "CU": 9000,
+    "BRASS": 9000,
+    "BRONZE": 9000,
+    "ALU": 2900,
+    "TI": 4500,
+    "NI-SPEC": 8500,
+    "POM": 1500,
+    "PE": 1000,
+    "PA": 1200,
+    "PP": 1000,
+    "PEEK": 1400,
+    "PET": 1700,
+    "PC": 1500,
+    "PVC": 1700,
+    "PTFE": 3000,
+    "PUR": 2000,
+    "PMMA": 1600,
+    "RUBBER": 7900,
+    "CAST-GG": 7150,
+    "CAST-GGG": 7250,
+    "CAST-TEMP": 7400,
 }
 
 # ============================
@@ -344,21 +450,16 @@ hustoty = {
 
 col1, col2, col3, col4, col5, col6, col7 = st.columns([1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.4])
 
-# 1) KOOPERÁCIA – ÁNO / NIE
 with col1:
     kooperacia = st.checkbox("Koop.", key="koop_checkbox")
 
-# 2) SUBCATEGORY
 with col2:
     subcategory = urci_subcategory(akost_vyber[0] if akost_vyber else "", material, material)
     st.write("**SUBCAT:**", subcategory)
 
-# 3) HUSTOTA
 with col3:
     hustota_default = hustoty.get(subcategory, 1000)
     hustota = st.number_input("Hustota", value=float(hustota_default), step=10.0)
-
-# 4) GEOMETRIA – OBJEM, HMOTNOSŤ, PLOCHA
 
 if tvar == "KR":
     D_m = d_mm / 1000
@@ -385,8 +486,6 @@ with col5:
 with col6:
     st.write("Plocha (dm²)")
     st.write(round(plocha, 2))
-
-# 5) KOOPERÁCIA – výber + výpočet ceny
 
 if kooperacia:
     df_koop = df_kooperacie[df_kooperacie["material"] == material]
@@ -415,8 +514,6 @@ if kooperacia:
 else:
     cena_ks = 0.0
 
-# 6) Vstupné náklady / ks
-
 vstupne_naklady_ks = cena_mat_ks + cena_ks
 
 with col7:
@@ -424,7 +521,6 @@ with col7:
     st.write(round(vstupne_naklady_ks, 3))
 
 st.divider()
-
 
 # ============================================
 # 5. RIADOK – AI PREDIKCIE (KR/STV)
@@ -437,9 +533,9 @@ import numpy as np
 st.divider()
 st.subheader("🤖 AI Predikcie (KR)")
 
-# ID pre Google Drive
 ID_KR_CENA = "1UT9SQzfWVnONGsPQLwxh8yxE4kJymjam"
 ID_KR_CAS = "1Xtqsn4B-go8czEXO99oGsDGgpt8_PUmU"
+
 
 @st.cache_resource
 def load_model_from_drive(file_id, local_filename):
@@ -449,31 +545,54 @@ def load_model_from_drive(file_id, local_filename):
         gdown.download(url, model_path, quiet=False)
     return joblib.load(model_path)
 
+
 def get_clean_subcategory(subcat):
-    allowed = ["ALLOYED", "ALU", "AUST", "BRASS", "BRONZE", "FERR", "HSS", "LOWAL", "MART", 
-               "OTHER", "PA", "PE", "PEEK", "PET", "POM", "PVC", "TOOL", "UNALL"]
+    allowed = [
+        "ALLOYED",
+        "ALU",
+        "AUST",
+        "BRASS",
+        "BRONZE",
+        "FERR",
+        "HSS",
+        "LOWAL",
+        "MART",
+        "OTHER",
+        "PA",
+        "PE",
+        "PEEK",
+        "PET",
+        "POM",
+        "PVC",
+        "TOOL",
+        "UNALL",
+    ]
     return subcat if subcat in allowed else "OTHER"
 
-# Inicializácia stavu
-if "time_confirmed" not in st.session_state: st.session_state.time_confirmed = False
-if "predicted_time" not in st.session_state: st.session_state.predicted_time = 0.0
-if "predicted_price" not in st.session_state: st.session_state.predicted_price = 0.0
+
+if "time_confirmed" not in st.session_state:
+    st.session_state.time_confirmed = False
+if "predicted_time" not in st.session_state:
+    st.session_state.predicted_time = 0.0
+if "predicted_price" not in st.session_state:
+    st.session_state.predicted_price = 0.0
 
 col_a, col_b, col_c, col_d = st.columns(4)
 
-# --- PREDPOKLAD ČASU ---
 with col_a:
     if st.button("🚀 Predikuj čas"):
         try:
             m_data = load_model_from_drive(ID_KR_CAS, "model_kr_cas.pkl")
             model = m_data["model"]
-            data = pd.DataFrame({
-                'hmotnost_kg': [hmotnost],
-                'plocha_m2': [plocha / 100],
-                'geom_koef': [l_mm / d_mm if d_mm > 0 else 0],
-                'log_pocet_kusov': [np.log1p(pocet_kusov)],
-                'subcategory_clean': [get_clean_subcategory(subcategory)]
-            })
+            data = pd.DataFrame(
+                {
+                    "hmotnost_kg": [hmotnost],
+                    "plocha_m2": [plocha / 100],
+                    "geom_koef": [l_mm / d_mm if d_mm > 0 else 0],
+                    "log_pocet_kusov": [np.log1p(pocet_kusov)],
+                    "subcategory_clean": [get_clean_subcategory(subcategory)],
+                }
+            )
             pred = np.expm1(model.predict(data))[0]
             st.session_state.predicted_time = round(pred, 2)
             st.session_state.time_confirmed = False
@@ -486,22 +605,23 @@ with col_b:
         st.session_state.predicted_time = vyr_cas_input
         st.session_state.time_confirmed = True
 
-# --- PREDPOKLAD CENY ---
 with col_c:
     if st.button("💰 Predikuj cenu", disabled=not st.session_state.time_confirmed):
         try:
             m_data = load_model_from_drive(ID_KR_CENA, "model_kr_cena.pkl")
             model = m_data["model"]
-            data_cena = pd.DataFrame({
-                "hmotnost_kg": [hmotnost],
-                "plocha_m2": [plocha / 100],
-                "geom_koef": [l_mm / d_mm if d_mm > 0 else 0],
-                "log_pocet_kusov": [np.log1p(pocet_kusov)],
-                "cena_material_predpoklad": [vstupne_naklady_ks],
-                "log_predikovany_cas": [np.log1p(st.session_state.predicted_time)],
-                "subcategory_clean": [get_clean_subcategory(subcategory)],
-                "zakaznik_krajina": [krajina_input if isinstance(krajina_input, str) else "Unknown"]
-            })
+            data_cena = pd.DataFrame(
+                {
+                    "hmotnost_kg": [hmotnost],
+                    "plocha_m2": [plocha / 100],
+                    "geom_koef": [l_mm / d_mm if d_mm > 0 else 0],
+                    "log_pocet_kusov": [np.log1p(pocet_kusov)],
+                    "cena_material_predpoklad": [vstupne_naklady_ks],
+                    "log_predikovany_cas": [np.log1p(st.session_state.predicted_time)],
+                    "subcategory_clean": [get_clean_subcategory(subcategory)],
+                    "zakaznik_krajina": [krajina_input if isinstance(krajina_input, str) else "Unknown"],
+                }
+            )
             pred_cena = np.expm1(model.predict(data_cena))[0]
             st.session_state.predicted_price = round(pred_cena, 2)
         except Exception as e:
