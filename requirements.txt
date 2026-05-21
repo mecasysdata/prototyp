@@ -6,3 +6,4 @@ joblib
 category-encoders
 openpyxl
 requests
+gdown
