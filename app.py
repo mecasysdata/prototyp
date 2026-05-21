@@ -526,53 +526,83 @@ with col7:
 st.divider()
 
 # ============================================================
-# 5) LOAD KR CENA MODEL (Google Drive)
+# 5) LOAD KR CENA MODEL Z GOOGLE DRIVE (RIEŠENIE B)
 # ============================================================
 
 import requests
 import joblib
 import io
 
+def download_from_drive(file_id: str) -> bytes:
+    """
+    Spoľahlivé stiahnutie veľkého súboru z Google Drive.
+    Obchádza 'virus scan' stránku a vráti čisté binárne dáta.
+    """
+    session = requests.Session()
+    URL = "https://drive.google.com/uc?export=download"
+
+    # prvý request – môže vrátiť warning stránku
+    response = session.get(URL, params={'id': file_id}, stream=True)
+    token = None
+
+    # hľadáme token, ktorý Google pridá pri veľkých súboroch
+    for key, value in response.cookies.items():
+        if key.startswith("download_warning"):
+            token = value
+
+    # ak existuje token, musíme potvrdiť sťahovanie
+    if token:
+        response = session.get(URL, params={'id': file_id, 'confirm': token}, stream=True)
+
+    return response.content
+
+
 @st.cache_resource
 def load_model_from_drive(file_id: str):
-    url = f"https://drive.google.com/uc?export=download&id={file_id}"
-    response = requests.get(url)
-    response.raise_for_status()
-    return joblib.load(io.BytesIO(response.content))
+    """
+    Stiahne model z Google Drive a načíta ho cez joblib.load().
+    """
+    raw_data = download_from_drive(file_id)
+    return joblib.load(io.BytesIO(raw_data))
 
+
+# ID KR CENA modelu
 KR_CENA_ID = "1UT9SQzfWVnONGsPQLwxh8yxE4kJymjam"
-kr_cena_package = load_model_from_drive(KR_CENA_ID)
 
+# načítanie modelu
+kr_cena_package = load_model_from_drive(KR_CENA_ID)
 kr_cena_model = kr_cena_package["model"]
 kr_cena_metadata = kr_cena_package["metadata"]
+
 
 # ============================================================
 # 6) FEATURE ENGINEERING PRE KR CENA (IDENTICKÉ AKO V TRÉNINGU)
 # ============================================================
 
-# Plocha v m2
+# plocha v m2
 plocha_m2 = (np.pi * (d_mm ** 2) / 4) / 1_000_000
 
-# Objem v m3
+# objem v m3
 objem_m3 = plocha_m2 * (l_mm / 1000)
 
-# Hmotnosť v kg
+# hmotnosť v kg
 hmotnost_kg = objem_m3 * hustota
 
-# Geometrický koeficient
+# geometrický koeficient
 geom_koef = l_mm / d_mm if d_mm > 0 else 0
 
-# Log počet kusov
+# log počet kusov
 log_pocet_kusov = np.log1p(pocet_kusov)
 
-# Subcategory_clean (rovnaké ako KR čas)
+# subcategory_clean (rovnaké ako pri KR čase)
 subcategory_clean = subcategory if subcategory in TRAINED_SUBCATS else "OTHER"
 
-# Log predikovaného času z KR čas modelu
+# log predikovaného času z KR čas modelu
 log_predikovany_cas = np.log1p(predikovany_cas_min)
 
+
 # ============================================================
-# 7) PREDIKCIA KR CENA (ČISTO MODEL)
+# 7) PREDIKCIA KR CENA (ČISTO MODEL – BEZ ÚPRAV)
 # ============================================================
 
 X_cena = pd.DataFrame([{
@@ -589,5 +619,11 @@ X_cena = pd.DataFrame([{
 log_pred_cena = kr_cena_model.predict(X_cena)[0]
 kr_cena_eur = float(np.expm1(log_pred_cena))
 
+
+# ============================================================
+# 8) VÝSTUP
+# ============================================================
+
 st.subheader("Predikovaná KR cena (model-only)")
 st.metric("Cena [€]", f"{kr_cena_eur:,.2f}".replace(",", " "))
+
