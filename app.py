@@ -162,7 +162,8 @@ with col5:
 # BOX – Pridať nový polotovar
 # ============================
 
-if polotovar == "+ Pridať nový polotovar":
+if polotovar_key == "new":
+
 
     st.markdown("### ➕ Pridať nový polotovar")
 
