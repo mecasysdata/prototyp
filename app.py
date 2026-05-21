@@ -3,10 +3,8 @@ import pandas as pd
 import requests
 import datetime
 
-# ============================
-# 1. Načítanie zákazníkov zo sheetu
-# ============================
 SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSuHQWbpryWNerWr8aKKheHbzTPhXI6lS7YH1sL5zwFIIzLfpTZz47acY_ua2e_fVqEcfxMBe5wnjue/pub?gid=0&single=true&output=csv"
+APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNR33wxSNXJFo9-o2otM-mdKQE22s3i3y5n08dY7eogGhhKDTasiPn3zaOoSihppTq/exec"
 
 @st.cache_data
 def load_customers():
@@ -16,27 +14,34 @@ def load_customers():
 
 df_zak = load_customers()
 
-# ============================
-# 2. UI – Riadok 1 (všetko v jednom riadku)
-# ============================
-col1, col2, col3, col4 = st.columns([1, 1, 1.2, 1])
+# ak sme práve pridali nového zákazníka, doplníme ho do zoznamu
+zakaznici = df_zak["zakaznik"].tolist()
+if "force_customer" in st.session_state:
+    fc = st.session_state["force_customer"]
+    if fc not in zakaznici:
+        zakaznici.append(fc)
 
-# --- 1. Políčko: Dátum ---
+zakaznici.append("+ Pridať nového zákazníka")
+
+# zistíme default index pre selectbox
+default_index = 0
+if "force_customer" in st.session_state:
+    fc = st.session_state["force_customer"]
+    if fc in zakaznici:
+        default_index = zakaznici.index(fc)
+
+# ======= RIADOK 1 – všetko v jednom riadku =======
+col1, col2, col3, col4, col5, col6, col7 = st.columns([1, 1, 1.4, 1, 1.4, 1, 0.8])
+
 with col1:
     date = st.date_input("Dátum", datetime.date.today())
 
-# --- 2. Políčko: Označenie CP ---
 with col2:
     cp_nazov = st.text_input("Označenie CP")
 
-# --- 3. Políčko: Zákazník ---
 with col3:
-    zakaznici = df_zak["zakaznik"].tolist()
-    zakaznici.append("+ Pridať nového zákazníka")
+    vybrany = st.selectbox("Zákazník", zakaznici, index=default_index)
 
-    vybrany = st.selectbox("Zákazník", zakaznici)
-
-# --- 4. Políčko: Krajina zákazníka ---
 with col4:
     if vybrany != "+ Pridať nového zákazníka":
         krajina_input = st.text_input(
@@ -45,33 +50,27 @@ with col4:
             disabled=True
         )
     else:
-        krajina_input = None  # doplní sa nižšie
+        krajina_input = None
 
-# ============================
-# 3. Pridanie nového zákazníka — všetko v JEDNOM RIADKU
-# ============================
+# tieto tri polia sú v TOM ISTOM RIADKU, len sa zobrazia, keď treba
+novy_zak = None
+nova_krajina = None
+
 if vybrany == "+ Pridať nového zákazníka":
-
-    colA, colB, colC = st.columns([1.2, 1, 0.8])
-
-    with colA:
+    with col5:
         novy_zak = st.text_input("Nový zákazník")
-
-    with colB:
-        krajina_input = st.text_input("Krajina zákazníka")
-
-    with colC:
+    with col6:
+        nova_krajina = st.text_input("Krajina nového zákazníka")
+    with col7:
         if st.button("Uložiť"):
-            if novy_zak and krajina_input:
+            if novy_zak and nova_krajina:
                 payload = {
                     "zakaznik": novy_zak,
-                    "krajina": krajina_input
+                    "krajina": nova_krajina
                 }
-
-                url = "https://script.google.com/macros/s/AKfycbwNR33wxSNXJFo9-o2otM-mdKQE22s3i3y5n08dY7eogGhhKDTasiPn3zaOoSihppTq/exec"
-                r = requests.post(url, json=payload)
-
+                r = requests.post(APP_SCRIPT_URL, json=payload)
                 if r.status_code == 200:
+                    st.session_state["force_customer"] = novy_zak
                     st.success("Zákazník bol uložený.")
                     st.cache_data.clear()
                     st.experimental_rerun()
@@ -80,7 +79,4 @@ if vybrany == "+ Pridať nového zákazníka":
             else:
                 st.error("Vyplň všetky polia.")
 
-# ============================
-# Divider pod celým riadkom
-# ============================
 st.divider()
