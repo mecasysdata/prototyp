@@ -174,6 +174,26 @@ st.subheader("Výber materiálu a polotovaru")
 # RIADOK 3 – Materiál • Akosť • Polotovar • Cena/bm • Cena/ks
 # ============================
 
+# ============================
+# LOAD SEMI-FINISHED PRODUCTS (HÁROK 1)
+# ============================
+
+POL_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQf4EiqZt1grkazJgfYWVhG0M8FGLNCjaGk6dcXhO3r04JQuZ9Qxv1jelDo3c8hBLy7Ny5C1pZqvbfS/pub?gid=0&single=true&output=csv"
+
+@st.cache_data
+def load_polotovary():
+    df = pd.read_csv(POL_URL)
+    df.columns = df.columns.str.lower().str.strip()
+    return df
+
+df_pol = load_polotovary()
+
+st.subheader("Výber materiálu a polotovaru")
+
+# ============================
+# RIADOK 3 – Materiál • Akosť • Polotovar • Cena/bm • Cena/ks
+# ============================
+
 col1, col2, col3, col4, col5 = st.columns([1.2, 1.6, 2.4, 1.2, 1.2])
 
 # --- 1. Materiál ---
@@ -191,7 +211,6 @@ with col3:
 
     df_filtered = df_pol[df_pol["akost"].isin(akost_vyber)]
 
-    # filter podľa tvaru položky (z riadku 2)
     if tvar == "KR":
         df_filtered = df_filtered[df_filtered["tvar"].isin(["KR", "6HR", "TR"])]
 
@@ -224,6 +243,7 @@ with col3:
             polotovar = st.selectbox("Polotovar", polozky, key="polotovar_select")
 
         if polotovar != "+ Pridať nový polotovar":
+            # nájdeme presný riadok podľa všetkých parametrov
             akost_sel = polotovar.split("]")[0].replace("[", "")
             vybrany_pol = df_filtered[df_filtered["akost"] == akost_sel].iloc[0]
         else:
@@ -321,7 +341,7 @@ if polotovar == "+ Pridať nový polotovar":
 
                 if r.status_code == 200:
 
-                    # vytvoríme formátovaný názov pre automatický výber
+                    # vytvoríme presný label pre automatický výber
                     new_polotovar_label = f"[{nova_akost}] {novy_nazov} | {r1}x{r2}x{r3} | Cena: {cena} €/bm"
 
                     st.session_state["force_polotovar"] = new_polotovar_label
@@ -334,5 +354,4 @@ if polotovar == "+ Pridať nový polotovar":
                     st.error("Nepodarilo sa uložiť polotovar.")
             else:
                 st.error("Vyplň všetky polia.")
-
 
