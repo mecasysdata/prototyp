@@ -3,6 +3,10 @@ import pandas as pd
 import requests
 import datetime
 import math
+import gdown
+import os
+import joblib
+import numpy as np
 
 # --- CONFIG ---
 st.set_page_config(layout="wide", page_title="MEC Calculation")
@@ -34,12 +38,10 @@ df_zak = load_customers()
 
 # --- BUILD CUSTOMER LIST ---
 zakaznici = df_zak["zakaznik"].tolist()
-
 if "force_customer" in st.session_state:
     fc = st.session_state["force_customer"]
     if fc not in zakaznici:
         zakaznici.append(fc)
-
 zakaznici.append("+ Pridať nového zákazníka")
 
 default_index = 0
@@ -49,119 +51,59 @@ if "force_customer" in st.session_state:
         default_index = zakaznici.index(fc)
 
 # ============================
-# RIADOK 1 – všetko v jednom riadku
+# RIADOK 1
 # ============================
-
 col1, col2, col3, col4, col5, col6, col7 = st.columns([1.2, 1.2, 1.6, 1.2, 1.6, 1.2, 0.8])
-
-with col1:
-    date = st.date_input("Dátum", datetime.date.today())
-
-with col2:
-    cp_nazov = st.text_input("Označenie CP")
-
-with col3:
-    vybrany = st.selectbox("Zákazník", zakaznici, index=default_index)
-
+with col1: date = st.date_input("Dátum", datetime.date.today())
+with col2: cp_nazov = st.text_input("Označenie CP")
+with col3: vybrany = st.selectbox("Zákazník", zakaznici, index=default_index)
 with col4:
+    krajina_input = ""
     if vybrany != "+ Pridať nového zákazníka":
-        krajina_input = df_zak.loc[df_zak["zakaznik"] == vybrany, "krajina"]
-        if len(krajina_input) > 0:
-            krajina_input = st.text_input("Krajina zákazníka", krajina_input.values[0], disabled=True)
-        else:
-            krajina_input = st.text_input("Krajina zákazníka", "", disabled=True)
-    else:
-        krajina_input = None
+        k_df = df_zak.loc[df_zak["zakaznik"] == vybrany, "krajina"]
+        krajina_input = k_df.values[0] if len(k_df) > 0 else ""
+    st.text_input("Krajina zákazníka", krajina_input, disabled=True)
 
-novy_zak = None
-nova_krajina = None
-
-with col5:
-    if vybrany == "+ Pridať nového zákazníka":
-        novy_zak = st.text_input("Nový zákazník")
-
-with col6:
-    if vybrany == "+ Pridať nového zákazníka":
-        nova_krajina = st.text_input("Krajina nového zákazníka")
-
-with col7:
-    if vybrany == "+ Pridať nového zákazníka":
+if vybrany == "+ Pridať nového zákazníka":
+    with col5: novy_zak = st.text_input("Nový zákazník")
+    with col6: nova_krajina = st.text_input("Krajina nového zákazníka")
+    with col7:
         if st.button("Uložiť"):
             if novy_zak and nova_krajina:
-                payload = {"zakaznik": novy_zak, "krajina": nova_krajina}
-                r = requests.post(APP_SCRIPT_URL, json=payload)
-
+                r = requests.post(APP_SCRIPT_URL, json={"zakaznik": novy_zak, "krajina": nova_krajina})
                 if r.status_code == 200:
                     st.session_state["force_customer"] = novy_zak
-                    st.success("Zákazník bol uložený.")
                     st.cache_data.clear()
-                    st.experimental_rerun()
-                else:
-                    st.error("Nepodarilo sa uložiť zákazníka.")
-            else:
-                st.error("Vyplň všetky polia.")
+                    st.rerun()
+                else: st.error("Chyba")
 
 st.divider()
 
 # ============================
-# RIADOK 2 – ITEM + STV/KR parametre
+# RIADOK 2 – ITEM + STV/KR
 # ============================
+col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns([1.6, 1, 1, 1, 1, 1, 1, 1, 1])
+with col1: item = st.text_input("ITEM")
+with col2: pocet_kusov = st.number_input("Počet kusov", min_value=1, step=1)
+with col3: narocnost = st.selectbox("Náročnosť", [1, 2, 3, 4, 5])
+with col4: tvar = st.selectbox("Tvar položky", ["STV", "KR"])
 
-col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns(
-    [1.6, 1, 1, 1, 1, 1, 1, 1, 1]
-)
-
-with col1:
-    item = st.text_input("ITEM")
-
-with col2:
-    pocet_kusov = st.number_input("Počet kusov", min_value=1, step=1)
-
-with col3:
-    narocnost = st.selectbox("Náročnosť", [1, 2, 3, 4, 5])
-
-with col4:
-    tvar = st.selectbox("Tvar položky", ["STV", "KR"])
-
-# --- STV ---
 dp = s = v = 0.0
 d_mm = l_mm = 0.0
-
 if tvar == "STV":
-    with col5:
-        dp = st.number_input("D/P (mm)", min_value=0.0, step=0.1)
-    with col6:
-        s = st.number_input("S (mm)", min_value=0.0, step=0.1)
-    with col7:
-        v = st.number_input("V (mm)", min_value=0.0, step=0.1)
-
-    with col8:
-        st.write("")
-    with col9:
-        st.write("")
-
-# --- KR ---
-if tvar == "KR":
-    with col5:
-        d_mm = st.number_input("D (mm)", min_value=0.0, step=0.1)
-    with col6:
-        l_mm = st.number_input("L (mm)", min_value=0.0, step=0.1)
-
-    with col7:
-        st.write("")
-    with col8:
-        st.write("")
-    with col9:
-        st.write("")
+    with col5: dp = st.number_input("D/P (mm)", min_value=0.0, step=0.1)
+    with col6: s = st.number_input("S (mm)", min_value=0.0, step=0.1)
+    with col7: v = st.number_input("V (mm)", min_value=0.0, step=0.1)
+else:
+    with col5: d_mm = st.number_input("D (mm)", min_value=0.0, step=0.1)
+    with col6: l_mm = st.number_input("L (mm)", min_value=0.0, step=0.1)
 
 st.divider()
 
 # ============================
-# LOAD SEMI-FINISHED PRODUCTS (HÁROK 1)
+# LOAD POLOTOVARY
 # ============================
-
 POL_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQf4EiqZt1grkazJgfYWVhG0M8FGLNCjaGk6dcXhO3r04JQuZ9Qxv1jelDo3c8hBLy7Ny5C1pZqvbfS/pub?gid=0&single=true&output=csv"
-
 @st.cache_data
 def load_polotovary():
     df = pd.read_csv(POL_URL)
@@ -171,83 +113,42 @@ def load_polotovary():
 df_pol = load_polotovary()
 
 # ============================
-# RIADOK 3 – Materiál • Akosť • Polotovar • Cena/bm • Cena/ks
+# RIADOK 3 – Opravená logika cien
 # ============================
-
 col1, col2, col3, col4, col5 = st.columns([1.2, 1.6, 2.4, 1.2, 1.2])
 
-# --- 1. Materiál ---
 with col1:
-    material_list = sorted(df_pol["material"].dropna().unique().tolist())
-    material = st.selectbox("Materiál", material_list, key="mat_select")
+    material = st.selectbox("Materiál", sorted(df_pol["material"].dropna().unique().tolist()), key="mat_select")
 
-# --- 2. Akosť ---
 with col2:
     akosti = sorted(df_pol[df_pol["material"] == material]["akost"].dropna().unique().tolist())
-    force_akost = st.session_state.get("force_akost", None)
+    akost_vyber = st.multiselect("Akosť", akosti, key="akost_select")
 
-    if force_akost and force_akost in akosti:
-        default_akosti = [force_akost]
-        st.session_state["force_akost"] = None
-    else:
-        default_akosti = []
-    akost_vyber = st.multiselect("Akosť", akosti, default=default_akosti, key="akost_select")
-
-# --- 3. Polotovar ---
 with col3:
     df_filtered = df_pol[df_pol["akost"].isin(akost_vyber)]
-    if tvar == "KR":
-        df_filtered = df_filtered[df_filtered["tvar"].isin(["KR", "6HR", "TR"])]
-
+    if tvar == "KR": df_filtered = df_filtered[df_filtered["tvar"].isin(["KR", "6HR", "TR"])]
+    
     polozky = []
-    force_pol = st.session_state.get("force_polotovar", None)
+    for _, r in df_filtered.iterrows():
+        polozky.append(f"[{r['akost']}] {r['názov']} | {r['rozmer1']}x{r['rozmer2']}x{r['rozmer3']} | Cena: {r['cena']} €/bm")
+    polozky.append("+ Pridať nový polotovar")
+    polotovar = st.selectbox("Polotovar", polozky, key="polotovar_select")
 
-    if df_filtered.empty:
-        st.warning("Pre túto akosť neexistuje žiadny polotovar. Pridaj nový.")
-        polotovar = "+ Pridať nový polotovar"
-        vybrany_pol = None
-    else:
-        for _, r in df_filtered.iterrows():
-            nazov = (
-                f"[{r['akost']}] {r['názov']} | "
-                f"{r['rozmer1']}x{r['rozmer2']}x{r['rozmer3']} | "
-                f"Cena: {r['cena']} €/bm"
-            )
-            polozky.append(nazov)
+# AUTOMATICKÝ VÝPOČET CIEN
+cena_bm = 0.0
+if polotovar != "+ Pridať nový polotovar":
+    akost_sel = polotovar.split("]")[0].replace("[", "")
+    match = df_filtered[df_filtered["akost"] == akost_sel]
+    if not match.empty:
+        cena_bm = float(match.iloc[0]["cena"])
 
-        polozky.append("+ Pridať nový polotovar")
-
-        if force_pol and force_pol in polozky:
-            polotovar = st.selectbox("Polotovar", polozky, index=polozky.index(force_pol), key="polotovar_select")
-            st.session_state["force_polotovar"] = None
-        else:
-            polotovar = st.selectbox("Polotovar", polozky, key="polotovar_select")
-
-        if polotovar != "+ Pridať nový polotovar":
-            akost_sel = polotovar.split("]")[0].replace("[", "")
-            vybrany_pol = df_filtered[df_filtered["akost"] == akost_sel].iloc[0]
-        else:
-            vybrany_pol = None
-
-# --- 4. Cena za bm ---
 with col4:
-    if vybrany_pol is not None:
-        cena_bm = float(vybrany_pol["cena"])
-    else:
-        cena_bm = 0.0
-    cena_bm = st.number_input("Cena €/bm", value=cena_bm, disabled=True, key="cena_bm")
+    st.number_input("Cena €/bm", value=cena_bm, disabled=True, key="cena_bm_in")
 
-# --- 5. Cena materiál / ks ---
 with col5:
-    if vybrany_pol is not None:
-        # POUŽITÁ OPRAVA: Výpočet podľa tvaru
-        dlzka_mm = l_mm if tvar == "KR" else dp
-        cena_mat_ks = round(cena_bm * (dlzka_mm / 1000), 4)
-    else:
-        cena_mat_ks = 0.0
-
-    st.number_input("Cena mat/ks", value=cena_mat_ks, disabled=True, key="cena_mat_ks")
-
+    dlzka_mm = l_mm if tvar == "KR" else dp
+    cena_mat_ks = round(cena_bm * (dlzka_mm / 1000), 4)
+    st.number_input("Cena mat/ks", value=cena_mat_ks, disabled=True, key="cena_mat_ks_in")
 
 # ============================
 # BOX – Pridať nový polotovar
