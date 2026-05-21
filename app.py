@@ -17,9 +17,9 @@ def load_customers():
 df_zak = load_customers()
 
 # ============================
-# 2. UI – Riadok 1
+# 2. UI – Riadok 1 (všetko v jednom riadku)
 # ============================
-col1, col2, col3, col4 = st.columns([1, 1, 1.2, 1])
+col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 1.2, 1, 1.2, 0.8])
 
 # --- 1. Políčko: Dátum ---
 with col1:
@@ -39,32 +39,39 @@ with col3:
 # --- 4. Políčko: Krajina zákazníka ---
 with col4:
     if vybrany != "+ Pridať nového zákazníka":
-        krajina = df_zak.loc[df_zak["zakaznik"] == vybrany, "krajina"].values[0]
-        krajina_input = st.text_input("Krajina zákazníka", krajina, disabled=True)
+        krajina_input = st.text_input(
+            "Krajina zákazníka",
+            df_zak.loc[df_zak["zakaznik"] == vybrany, "krajina"].values[0],
+            disabled=True
+        )
     else:
         krajina_input = st.text_input("Krajina zákazníka (nový)")
 
-# ============================
-# 3. Pridanie nového zákazníka
-# ============================
-if vybrany == "+ Pridať nového zákazníka":
-    novy_zak = st.text_input("Názov nového zákazníka")
+# --- 5. Políčko: Názov nového zákazníka (zobrazí sa len vtedy, keď treba) ---
+with col5:
+    if vybrany == "+ Pridať nového zákazníka":
+        novy_zak = st.text_input("Nový zákazník")
+    else:
+        novy_zak = None
 
-    if st.button("Uložiť zákazníka"):
-        if novy_zak and krajina_input:
-            payload = {
-                "zakaznik": novy_zak,
-                "krajina": krajina_input
-            }
+# --- 6. Tlačidlo Uložiť zákazníka (tiež len vtedy, keď treba) ---
+with col6:
+    if vybrany == "+ Pridať nového zákazníka":
+        if st.button("Uložiť"):
+            if novy_zak and krajina_input:
+                payload = {
+                    "zakaznik": novy_zak,
+                    "krajina": krajina_input
+                }
 
-            url = "https://script.google.com/macros/s/AKfycbwNR33wxSNXJFo9-o2otM-mdKQE22s3i3y5n08dY7eogGhhKDTasiPn3zaOoSihppTq/exec"
-            r = requests.post(url, json=payload)
+                url = "https://script.google.com/macros/s/AKfycbwNR33wxSNXJFo9-o2otM-mdKQE22s3i3y5n08dY7eogGhhKDTasiPn3zaOoSihppTq/exec"
+                r = requests.post(url, json=payload)
 
-            if r.status_code == 200:
-                st.success("Zákazník bol uložený.")
-                st.cache_data.clear()
-                st.experimental_rerun()
+                if r.status_code == 200:
+                    st.success("Zákazník bol uložený.")
+                    st.cache_data.clear()
+                    st.experimental_rerun()
+                else:
+                    st.error("Nepodarilo sa uložiť zákazníka.")
             else:
-                st.error("Nepodarilo sa uložiť zákazníka.")
-        else:
-            st.error("Vyplň všetky polia.")
+                st.error("Vyplň všetky polia.")
