@@ -168,7 +168,6 @@ def load_polotovary():
 
 df_pol = load_polotovary()
 
-st.subheader("Výber materiálu a polotovaru")
 
 # ============================
 # LOAD SEMI-FINISHED PRODUCTS (HÁROK 1)
