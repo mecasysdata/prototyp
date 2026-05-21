@@ -171,10 +171,6 @@ df_pol = load_polotovary()
 st.subheader("Výber materiálu a polotovaru")
 
 # ============================
-# RIADOK 3 – Materiál • Akosť • Polotovar • Cena/bm • Cena/ks
-# ============================
-
-# ============================
 # LOAD SEMI-FINISHED PRODUCTS (HÁROK 1)
 # ============================
 
@@ -187,8 +183,6 @@ def load_polotovary():
     return df
 
 df_pol = load_polotovary()
-
-st.subheader("Výber materiálu a polotovaru")
 
 # ============================
 # RIADOK 3 – Materiál • Akosť • Polotovar • Cena/bm • Cena/ks
@@ -204,7 +198,17 @@ with col1:
 # --- 2. Akosť ---
 with col2:
     akosti = sorted(df_pol[df_pol["material"] == material]["akost"].dropna().unique().tolist())
-    akost_vyber = st.multiselect("Akosť", akosti, key="akost_select")
+
+    # ak bola práve uložená nová akosť → automaticky ju vyber
+    force_akost = st.session_state.get("force_akost", None)
+
+    if force_akost and force_akost in akosti:
+        default_akosti = [force_akost]
+        st.session_state["force_akost"] = None
+    else:
+        default_akosti = []
+
+    akost_vyber = st.multiselect("Akosť", akosti, default=default_akosti, key="akost_select")
 
 # --- 3. Polotovar ---
 with col3:
@@ -216,7 +220,6 @@ with col3:
 
     polozky = []
 
-    # ak bol práve uložený nový polotovar → vyber ho
     force_pol = st.session_state.get("force_polotovar", None)
 
     if df_filtered.empty:
@@ -235,7 +238,6 @@ with col3:
 
         polozky.append("+ Pridať nový polotovar")
 
-        # ak máme force_polotovar → vyber ho
         if force_pol and force_pol in polozky:
             polotovar = st.selectbox("Polotovar", polozky, index=polozky.index(force_pol), key="polotovar_select")
             st.session_state["force_polotovar"] = None
@@ -243,7 +245,6 @@ with col3:
             polotovar = st.selectbox("Polotovar", polozky, key="polotovar_select")
 
         if polotovar != "+ Pridať nový polotovar":
-            # nájdeme presný riadok podľa všetkých parametrov
             akost_sel = polotovar.split("]")[0].replace("[", "")
             vybrany_pol = df_filtered[df_filtered["akost"] == akost_sel].iloc[0]
         else:
@@ -341,9 +342,9 @@ if polotovar == "+ Pridať nový polotovar":
 
                 if r.status_code == 200:
 
-                    # vytvoríme presný label pre automatický výber
                     new_polotovar_label = f"[{nova_akost}] {novy_nazov} | {r1}x{r2}x{r3} | Cena: {cena} €/bm"
 
+                    st.session_state["force_akost"] = nova_akost
                     st.session_state["force_polotovar"] = new_polotovar_label
 
                     st.success("Polotovar bol uložený.")
@@ -354,4 +355,5 @@ if polotovar == "+ Pridať nový polotovar":
                     st.error("Nepodarilo sa uložiť polotovar.")
             else:
                 st.error("Vyplň všetky polia.")
+
 
