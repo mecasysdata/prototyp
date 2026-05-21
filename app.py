@@ -31,7 +31,7 @@ if "force_customer" in st.session_state:
         default_index = zakaznici.index(fc)
 
 # ======= RIADOK 1 – všetko v jednom riadku =======
-col1, col2, col3, col4, col5, col6, col7 = st.columns([1.5, 1.5, 2, 1, 1.5, 1, 0.8])
+col1, col2, col3, col4, col5, col6, col7 = st.columns([1.2, 1.2, 1.6, 1.2, 1.6, 1.2, 0.8])
 
 with col1:
     date = st.date_input("Dátum", datetime.date.today())
