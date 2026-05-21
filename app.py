@@ -248,7 +248,6 @@ with col5:
 
     st.number_input("Cena mat/ks", value=cena_mat_ks, disabled=True, key="cena_mat_ks")
 
-st.divider()
 
 # ============================
 # BOX – Pridať nový polotovar
