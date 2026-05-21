@@ -126,21 +126,29 @@ with col2:
 
 with col3:
     df_filtered = df_pol[df_pol["akost"].isin(akost_vyber)]
-    if tvar == "KR": df_filtered = df_filtered[df_filtered["tvar"].isin(["KR", "6HR", "TR"])]
-    
-    polozky = []
-    for _, r in df_filtered.iterrows():
-        polozky.append(f"[{r['akost']}] {r['názov']} | {r['rozmer1']}x{r['rozmer2']}x{r['rozmer3']} | Cena: {r['cena']} €/bm")
-    polozky.append("+ Pridať nový polotovar")
-    polotovar = st.selectbox("Polotovar", polozky, key="polotovar_select")
+    if tvar == "KR":
+        df_filtered = df_filtered[df_filtered["tvar"].isin(["KR", "6HR", "TR"])]
 
-# AUTOMATICKÝ VÝPOČET CIEN
-cena_bm = 0.0
-if polotovar != "+ Pridať nový polotovar":
-    akost_sel = polotovar.split("]")[0].replace("[", "")
-    match = df_filtered[df_filtered["akost"] == akost_sel]
-    if not match.empty:
-        cena_bm = float(match.iloc[0]["cena"])
+    # --- NOVÁ LOGIKA: selectbox vracia index riadku ---
+    polozky_dict = {
+        idx: f"[{r['akost']}] {r['názov']} | {r['rozmer1']}x{r['rozmer2']}x{r['rozmer3']} | Cena: {r['cena']} €/bm"
+        for idx, r in df_filtered.iterrows()
+    }
+    polozky_dict["new"] = "+ Pridať nový polotovar"
+
+    polotovar_key = st.selectbox(
+        "Polotovar",
+        list(polozky_dict.keys()),
+        format_func=lambda x: polozky_dict[x],
+        key="polotovar_select"
+    )
+
+# --- VÝPOČET CIEN ---
+if polotovar_key != "new":
+    r = df_filtered.loc[polotovar_key]
+    cena_bm = float(r["cena"])
+else:
+    cena_bm = 0.0
 
 with col4:
     st.number_input("Cena €/bm", value=cena_bm, disabled=True, key="cena_bm_in")
