@@ -524,3 +524,70 @@ with col7:
     st.write(round(vstupne_naklady_ks, 3))
 
 st.divider()
+
+# ============================================================
+# 5) LOAD KR CENA MODEL (Google Drive)
+# ============================================================
+
+import requests
+import joblib
+import io
+
+@st.cache_resource
+def load_model_from_drive(file_id: str):
+    url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    response = requests.get(url)
+    response.raise_for_status()
+    return joblib.load(io.BytesIO(response.content))
+
+KR_CENA_ID = "1UT9SQzfWVnONGsPQLwxh8yxE4kJymjam"
+kr_cena_package = load_model_from_drive(KR_CENA_ID)
+
+kr_cena_model = kr_cena_package["model"]
+kr_cena_metadata = kr_cena_package["metadata"]
+
+# ============================================================
+# 6) FEATURE ENGINEERING PRE KR CENA (IDENTICKÉ AKO V TRÉNINGU)
+# ============================================================
+
+# Plocha v m2
+plocha_m2 = (np.pi * (d_mm ** 2) / 4) / 1_000_000
+
+# Objem v m3
+objem_m3 = plocha_m2 * (l_mm / 1000)
+
+# Hmotnosť v kg
+hmotnost_kg = objem_m3 * hustota
+
+# Geometrický koeficient
+geom_koef = l_mm / d_mm if d_mm > 0 else 0
+
+# Log počet kusov
+log_pocet_kusov = np.log1p(pocet_kusov)
+
+# Subcategory_clean (rovnaké ako KR čas)
+subcategory_clean = subcategory if subcategory in TRAINED_SUBCATS else "OTHER"
+
+# Log predikovaného času z KR čas modelu
+log_predikovany_cas = np.log1p(predikovany_cas_min)
+
+# ============================================================
+# 7) PREDIKCIA KR CENA (ČISTO MODEL)
+# ============================================================
+
+X_cena = pd.DataFrame([{
+    "hmotnost_kg": hmotnost_kg,
+    "plocha_m2": plocha_m2,
+    "geom_koef": geom_koef,
+    "log_pocet_kusov": log_pocet_kusov,
+    "cena_material_predpoklad": cena_material_predpoklad,
+    "log_predikovany_cas": log_predikovany_cas,
+    "subcategory_clean": subcategory_clean,
+    "zakaznik_krajina": zakaznik_krajina
+}])
+
+log_pred_cena = kr_cena_model.predict(X_cena)[0]
+kr_cena_eur = float(np.expm1(log_pred_cena))
+
+st.subheader("Predikovaná KR cena (model-only)")
+st.metric("Cena [€]", f"{kr_cena_eur:,.2f}".replace(",", " "))
