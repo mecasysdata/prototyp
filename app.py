@@ -82,3 +82,58 @@ if vybrany == "+ Pridať nového zákazníka":
                 st.error("Vyplň všetky polia.")
 
 st.divider()
+# ============================
+# Riadok 2 – všetko v jednom riadku
+# ============================
+
+col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns(
+    [1.6, 1, 1, 1, 1, 1, 1, 1, 1]
+)
+
+# --- ITEM ---
+with col1:
+    item = st.text_input("ITEM")
+
+# --- Počet kusov ---
+with col2:
+    pocet_kusov = st.number_input("Počet kusov", min_value=1, step=1)
+
+# --- Náročnosť ---
+with col3:
+    narocnost = st.selectbox("Náročnosť", [1, 2, 3, 4, 5])
+
+# --- Tvar položky ---
+with col4:
+    tvar = st.selectbox("Tvar položky", ["STV", "KR"])
+
+# --- STV polia ---
+if tvar == "STV":
+    with col5:
+        dp = st.number_input("D/P (mm)", min_value=0.0, step=0.1)
+    with col6:
+        s = st.number_input("S (mm)", min_value=0.0, step=0.1)
+    with col7:
+        v = st.number_input("V (mm)", min_value=0.0, step=0.1)
+
+    # prázdne placeholdery pre KR polia, aby sa nerozbilo rozloženie
+    with col8:
+        st.write("")
+    with col9:
+        st.write("")
+
+# --- KR polia ---
+if tvar == "KR":
+    with col5:
+        d_mm = st.number_input("D (mm)", min_value=0.0, step=0.1)
+    with col6:
+        l_mm = st.number_input("L (mm)", min_value=0.0, step=0.1)
+
+    # prázdne placeholdery pre STV polia
+    with col7:
+        st.write("")
+    with col8:
+        st.write("")
+    with col9:
+        st.write("")
+
+st.divider()
