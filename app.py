@@ -10,11 +10,13 @@ st.set_page_config(layout="wide", page_title="MEC Calculation")
 SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSuHQWbpryWNerWr8aKKheHbzTPhXI6lS7YH1sL5zwFIIzLfpTZz47acY_ua2e_fVqEcfxMBe5wnjue/pub?gid=0&single=true&output=csv"
 APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNR33wxSNXJFo9-o2otM-mdKQE22s3i3y5n08dY7eogGhhKDTasiPn3zaOoSihppTq/exec"
 
-LOGO A NÁZOV ---
+# --- LOGO A NÁZOV ---
 col_logo, col_title = st.columns([1, 5])
 with col_logo:
-    try: st.image("logo.png", width=150)
-    except: st.write("🖼️ Logo")
+    try:
+        st.image("logo.png", width=150)
+    except:
+        st.write("🖼️ Logo")
 with col_title:
     st.title("MEC Calculation")
 
