@@ -168,8 +168,6 @@ def load_polotovary():
 
 df_pol = load_polotovary()
 
-st.subheader("Výber materiálu a polotovaru")
-
 # ============================
 # RIADOK 3 – Materiál • Akosť • Polotovar
 # ============================
