@@ -503,8 +503,6 @@ import os
 import joblib
 import numpy as np
 
-st.divider()
-st.subheader("🤖 AI Predikcie (KR)")
 
 ID_KR_CENA = "1UT9SQzfWVnONGsPQLwxh8yxE4kJymjam"
 ID_KR_CAS = "1Xtqsn4B-go8czEXO99oGsDGgpt8_PUmU"
