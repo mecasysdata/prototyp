@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 import datetime
+import math
 
 # --- CONFIG ---
 st.set_page_config(layout="wide", page_title="MEC Calculation")
@@ -34,7 +35,6 @@ df_zak = load_customers()
 # --- BUILD CUSTOMER LIST ---
 zakaznici = df_zak["zakaznik"].tolist()
 
-# ak bol práve pridaný nový zákazník → zobraz ho v selectboxe
 if "force_customer" in st.session_state:
     fc = st.session_state["force_customer"]
     if fc not in zakaznici:
@@ -42,7 +42,6 @@ if "force_customer" in st.session_state:
 
 zakaznici.append("+ Pridať nového zákazníka")
 
-# default index
 default_index = 0
 if "force_customer" in st.session_state:
     fc = st.session_state["force_customer"]
@@ -74,19 +73,19 @@ with col4:
     else:
         krajina_input = None
 
-# --- NOVÝ ZÁKAZNÍK (v tom istom riadku) ---
 novy_zak = None
 nova_krajina = None
 
-if vybrany == "+ Pridať nového zákazníka":
-
-    with col5:
+with col5:
+    if vybrany == "+ Pridať nového zákazníka":
         novy_zak = st.text_input("Nový zákazník")
 
-    with col6:
+with col6:
+    if vybrany == "+ Pridať nového zákazníka":
         nova_krajina = st.text_input("Krajina nového zákazníka")
 
-    with col7:
+with col7:
+    if vybrany == "+ Pridať nového zákazníka":
         if st.button("Uložiť"):
             if novy_zak and nova_krajina:
                 payload = {"zakaznik": novy_zak, "krajina": nova_krajina}
@@ -125,6 +124,9 @@ with col4:
     tvar = st.selectbox("Tvar položky", ["STV", "KR"])
 
 # --- STV ---
+dp = s = v = 0.0
+d_mm = l_mm = 0.0
+
 if tvar == "STV":
     with col5:
         dp = st.number_input("D/P (mm)", min_value=0.0, step=0.1)
@@ -168,21 +170,6 @@ def load_polotovary():
 
 df_pol = load_polotovary()
 
-
-# ============================
-# LOAD SEMI-FINISHED PRODUCTS (HÁROK 1)
-# ============================
-
-POL_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQf4EiqZt1grkazJgfYWVhG0M8FGLNCjaGk6dcXhO3r04JQuZ9Qxv1jelDo3c8hBLy7Ny5C1pZqvbfS/pub?gid=0&single=true&output=csv"
-
-@st.cache_data
-def load_polotovary():
-    df = pd.read_csv(POL_URL)
-    df.columns = df.columns.str.lower().str.strip()
-    return df
-
-df_pol = load_polotovary()
-
 # ============================
 # RIADOK 3 – Materiál • Akosť • Polotovar • Cena/bm • Cena/ks
 # ============================
@@ -198,7 +185,6 @@ with col1:
 with col2:
     akosti = sorted(df_pol[df_pol["material"] == material]["akost"].dropna().unique().tolist())
 
-    # ak bola práve uložená nová akosť → automaticky ju vyber
     force_akost = st.session_state.get("force_akost", None)
 
     if force_akost and force_akost in akosti:
@@ -355,7 +341,6 @@ if polotovar == "+ Pridať nový polotovar":
             else:
                 st.error("Vyplň všetky polia.")
 
-
 # ============================
 # LOAD KOOPERÁCIE (HÁROK)
 # ============================
@@ -371,6 +356,89 @@ def load_kooperacie():
 df_kooperacie = load_kooperacie()
 
 # ============================
+# SUBCATEGORY + HUSTOTY – FUNKCIE A DÁTA PRE RIADOK 4
+# ============================
+
+def urci_subcategory(akost, material, nazov_materialu):
+    ak = str(akost).replace(" ", "").replace(",", ".")
+
+    vynimky = {
+        "1.3505": "TOOL",
+        "1.35": "TOOL",
+        "1.4308": "AUST",
+        "1.4408": "AUST",
+        "1.47": "STAIN-SPEC",
+        "1.48": "STAIN-SPEC",
+        "1.0619": "UNALL",
+        "1.07": "UNALL",
+        "1.11": "UNALL",
+        "1.12": "UNALL",
+        "2.4": "NI-SPEC",
+        "1.39": "ALLOYED",
+        "1.29": "TOOL"
+    }
+    for prefix, sub in vynimky.items():
+        if ak.startswith(prefix):
+            return sub
+
+    if ak.startswith(("1.00", "1.01", "1.02", "1.03", "1.04", "1.05", "1.06", "1.07", "1.08", "1.09", "1.10", "1.11", "1.12", "1.13", "1.14")):
+        return "UNALL"
+
+    if ak.startswith("1.43") or ak.startswith("1.44") or ak.startswith("1.45"):
+        return "AUST"
+    if ak.startswith("1.41"):
+        return "MART"
+    if ak.startswith("1.4462") or ak.startswith("1.44"):
+        return "DUPX"
+    if ak.startswith("1.40"):
+        return "FERR"
+    if ak.startswith(("1.46", "1.47", "1.48", "1.49")):
+        return "STAIN-SPEC"
+    if ak.startswith(("1.33", "1.34", "1.35", "1.36", "1.37", "1.38")):
+        return "HSS"
+    if ak.startswith(("1.20", "1.21", "1.22", "1.23", "1.24", "1.25", "1.26", "1.27", "1.28", "1.29", "1.30", "1.31", "1.32")):
+        return "TOOL"
+    if ak.startswith(("1.65", "1.66", "1.67", "1.68", "1.69", "1.70", "1.71", "1.72", "1.73", "1.74", "1.75", "1.76", "1.77", "1.78", "1.79", "1.80", "1.81", "1.82", "1.83", "1.84", "1.85", "1.86", "1.87", "1.88", "1.89")):
+        return "ALLOYED"
+
+    plast_map = {
+        "POM": "POM",
+        "PEEK": "PEEK",
+        "PET": "PET",
+        "PC": "PC",
+        "PVC": "PVC",
+        "PTFE": "PTFE",
+        "PUR": "PUR",
+        "PMMA": "PMMA",
+        "RUBBER": "RUBBER",
+        "PA": "PA",
+        "PP": "PP",
+        "PE": "PE"
+    }
+
+    naz = nazov_materialu.upper()
+
+    for key in plast_map:
+        if naz == key:
+            return plast_map[key]
+
+    for key in plast_map:
+        if naz.startswith(key):
+            return plast_map[key]
+
+    return "UNKNOWN"
+
+
+hustoty = {
+    "UNALL": 7900, "LOWAL": 7900, "ALLOYED": 7900, "TOOL": 7900, "HSS": 7900,
+    "AUST": 8000, "MART": 8000, "DUPX": 8000, "FERR": 8000, "STAIN-SPEC": 8000,
+    "CU": 9000, "BRASS": 9000, "BRONZE": 9000, "ALU": 2900, "TI": 4500, "NI-SPEC": 8500,
+    "POM": 1500, "PE": 1000, "PA": 1200, "PP": 1000, "PEEK": 1400, "PET": 1700,
+    "PC": 1500, "PVC": 1700, "PTFE": 3000, "PUR": 2000, "PMMA": 1600, "RUBBER": 7900,
+    "CAST-GG": 7150, "CAST-GGG": 7250, "CAST-TEMP": 7400
+}
+
+# ============================
 # RIADOK 4 – všetko vedľa seba
 # ============================
 
@@ -378,46 +446,33 @@ st.subheader("Výpočty – geometria, hustota, hmotnosť, plocha, kooperácia")
 
 col1, col2, col3, col4, col5, col6, col7 = st.columns([1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.4])
 
-# ---------------------------------------------------------
 # 1) KOOPERÁCIA – ÁNO / NIE
-# ---------------------------------------------------------
-
 with col1:
     kooperacia = st.checkbox("Koop.", key="koop_checkbox")
 
-# ---------------------------------------------------------
 # 2) SUBCATEGORY
-# ---------------------------------------------------------
-
 with col2:
     subcategory = urci_subcategory(akost_vyber[0] if akost_vyber else "", material, material)
     st.write("**SUBCAT:**", subcategory)
 
-# ---------------------------------------------------------
 # 3) HUSTOTA
-# ---------------------------------------------------------
-
 with col3:
     hustota_default = hustoty.get(subcategory, 1000)
     hustota = st.number_input("Hustota", value=float(hustota_default), step=10.0)
 
-# ---------------------------------------------------------
 # 4) GEOMETRIA – OBJEM, HMOTNOSŤ, PLOCHA
-# ---------------------------------------------------------
-
-import math
 
 if tvar == "KR":
-    D_m = D / 1000
-    L_m = L / 1000
-    objem = math.pi * (D_m/2)**2 * L_m
-    plocha = (math.pi * D_m * L_m + 2 * math.pi * (D_m/2)**2) * 100
+    D_m = d_mm / 1000
+    L_m = l_mm / 1000
+    objem = math.pi * (D_m / 2) ** 2 * L_m
+    plocha = (math.pi * D_m * L_m + 2 * math.pi * (D_m / 2) ** 2) * 100
 else:
     s_m = s / 1000
     v_m = v / 1000
     L_m = dp / 1000
     objem = s_m * v_m * L_m
-    plocha = 2 * (s_m*v_m + s_m*L_m + v_m*L_m) * 100
+    plocha = 2 * (s_m * v_m + s_m * L_m + v_m * L_m) * 100
 
 hmotnost = objem * hustota
 
@@ -433,9 +488,7 @@ with col6:
     st.write("Plocha (dm²)")
     st.write(round(plocha, 2))
 
-# ---------------------------------------------------------
 # 5) KOOPERÁCIA – výber + výpočet ceny
-# ---------------------------------------------------------
 
 if kooperacia:
     df_koop = df_kooperacie[df_kooperacie["material"] == material]
@@ -457,21 +510,17 @@ if kooperacia:
     else:
         cena_ks = 0.0
 
-    cena_spolu = cena_ks * pocet_ks
+    cena_spolu = cena_ks * pocet_kusov
 
     if cena_spolu < min_zakazka:
-        cena_ks = min_zakazka / pocet_ks
+        cena_ks = min_zakazka / pocet_kusov
 else:
     cena_ks = 0.0
 
-# ---------------------------------------------------------
 # 6) Vstupné náklady / ks
-# ---------------------------------------------------------
 
 vstupne_naklady_ks = cena_mat_ks + cena_ks
 
 with col7:
     st.write("Vstupné €/ks")
     st.write(round(vstupne_naklady_ks, 3))
-
-
