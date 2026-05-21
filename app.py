@@ -287,10 +287,10 @@ df_kooperacie = load_kooperacie()
 # ============================
 # SUBCATEGORY + HUSTOTY – FUNKCIE A DÁTA PRE RIADOK 4
 # ============================
-
 def urci_subcategory(akost, material, nazov_materialu):
     ak = str(akost).replace(" ", "").replace(",", ".")
 
+    # --- VÝNIMKY ---
     vynimky = {
         "1.3505": "TOOL",
         "1.35": "TOOL",
@@ -304,94 +304,63 @@ def urci_subcategory(akost, material, nazov_materialu):
         "1.12": "UNALL",
         "2.4": "NI-SPEC",
         "1.39": "ALLOYED",
-        "1.29": "TOOL"
+        "1.29": "TOOL",
     }
+
     for prefix, sub in vynimky.items():
         if ak.startswith(prefix):
             return sub
 
-    if ak.startswith(
-        (
-            "1.00",
-            "1.01",
-            "1.02",
-            "1.03",
-            "1.04",
-            "1.05",
-            "1.06",
-            "1.07",
-            "1.08",
-            "1.09",
-            "1.10",
-            "1.11",
-            "1.12",
-            "1.13",
-            "1.14",
-        )
-    ):
+    # --- OCEĽ ---
+    if ak.startswith(tuple(f"1.{i:02d}" for i in range(0, 15))):
         return "UNALL"
 
-    if ak.startswith("1.43") or ak.startswith("1.44") or ak.startswith("1.45"):
-        return "AUST"
-    if ak.startswith("1.41"):
-        return "MART"
-    if ak.startswith("1.4462") or ak.startswith("1.44"):
-        return "DUPX"
-    if ak.startswith("1.40"):
-        return "FERR"
-    if ak.startswith(("1.46", "1.47", "1.48", "1.49")):
-        return "STAIN-SPEC"
-    if ak.startswith(("1.33", "1.34", "1.35", "1.36", "1.37", "1.38")):
-        return "HSS"
-    if ak.startswith(
-        (
-            "1.20",
-            "1.21",
-            "1.22",
-            "1.23",
-            "1.24",
-            "1.25",
-            "1.26",
-            "1.27",
-            "1.28",
-            "1.29",
-            "1.30",
-            "1.31",
-            "1.32",
-        )
-    ):
-        return "TOOL"
-    if ak.startswith(
-        (
-            "1.65",
-            "1.66",
-            "1.67",
-            "1.68",
-            "1.69",
-            "1.70",
-            "1.71",
-            "1.72",
-            "1.73",
-            "1.74",
-            "1.75",
-            "1.76",
-            "1.77",
-            "1.78",
-            "1.79",
-            "1.80",
-            "1.81",
-            "1.82",
-            "1.83",
-            "1.84",
-            "1.85",
-            "1.86",
-            "1.87",
-            "1.88",
-            "1.89",
-        )
-    ):
+    if ak.startswith(tuple(f"1.{i:02d}" for i in range(15, 65))):
+        return "LOWAL"
+
+    if ak.startswith(tuple(f"1.{i:02d}" for i in range(65, 90))):
         return "ALLOYED"
 
+    if ak.startswith(tuple(f"1.{i:02d}" for i in range(20, 33))):
+        return "TOOL"
+
+    if ak.startswith(tuple(f"1.{i:02d}" for i in range(33, 39))):
+        return "HSS"
+
+    # --- NEREZ (poradie dôležité) ---
+    if ak.startswith("1.4462"):
+        return "DUPX"
+
+    if ak.startswith("1.44"):
+        return "DUPX"
+
+    if ak.startswith("1.43") or ak.startswith("1.45"):
+        return "AUST"
+
+    if ak.startswith("1.41"):
+        return "MART"
+
+    if ak.startswith("1.40"):
+        return "FERR"
+
+    if ak.startswith(("1.46", "1.47", "1.48", "1.49")):
+        return "STAIN-SPEC"
+
+    # --- FAREBNÉ KOVY ---
+    if ak.startswith(("2.00", "2.01")):
+        return "CU"
+    if ak.startswith(("2.02", "2.03", "2.04", "2.05")):
+        return "BRASS"
+    if ak.startswith(("2.09", "2.10", "2.11", "2.12", "2.13")):
+        return "BRONZE"
+    if ak.startswith(("3.0", "3.1", "3.2", "3.3", "3.4", "3.5")):
+        return "ALU"
+    if ak.startswith("3.7"):
+        return "TI"
+    if ak.startswith("2.4"):
+        return "NI-SPEC"
+
+    # --- PLASTY ---
     plast_map = {
         "POM": "POM",
         "PEEK": "PEEK",
@@ -407,18 +376,13 @@ def urci_subcategory(akost, material, nazov_materialu):
         "PE": "PE",
     }
 
-    naz = nazov_materialu.upper()
+    naz = str(nazov_materialu).upper()
 
     for key in plast_map:
-        if naz == key:
-            return plast_map[key]
-
-    for key in plast_map:
-        if naz.startswith(key):
+        if naz == key or naz.startswith(key):
             return plast_map[key]
 
     return "UNKNOWN"
-
 
 hustoty = {
     "UNALL": 7900,
