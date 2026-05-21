@@ -155,6 +155,7 @@ if tvar == "KR":
 st.divider()
 
 # ============================
+# ============================
 # LOAD SEMI-FINISHED PRODUCTS (HÁROK 1)
 # ============================
 
@@ -181,7 +182,7 @@ with col1:
     material_list = sorted(df_pol["material"].dropna().unique().tolist())
     material = st.selectbox("Materiál", material_list)
 
-# --- 2. Akosť (multiselect) ---
+# --- 2. Akosť ---
 with col2:
     akosti = sorted(df_pol[df_pol["material"] == material]["akost"].dropna().unique().tolist())
     akost_vyber = st.multiselect("Akosť", akosti)
@@ -191,16 +192,19 @@ with col3:
 
     df_filtered = df_pol[df_pol["akost"].isin(akost_vyber)]
 
-    # filter podľa tvaru položky (z riadku 2)
     if tvar == "KR":
         df_filtered = df_filtered[df_filtered["tvar"].isin(["KR", "6HR", "TR"])]
 
     polozky = []
 
+    # ak bol práve uložený nový polotovar → vyber ho
+    force_pol = st.session_state.get("force_polotovar", None)
+
     if df_filtered.empty:
         st.warning("Pre túto akosť neexistuje žiadny polotovar. Pridaj nový.")
         polotovar = "+ Pridať nový polotovar"
         vybrany_pol = None
+
     else:
         for _, r in df_filtered.iterrows():
             nazov = (
@@ -211,9 +215,14 @@ with col3:
             polozky.append(nazov)
 
         polozky.append("+ Pridať nový polotovar")
-        polotovar = st.selectbox("Polotovar", polozky)
 
-        # nájdenie vybraného riadku
+        # ak máme force_polotovar → vyber ho
+        if force_pol and force_pol in polozky:
+            polotovar = st.selectbox("Polotovar", polozky, index=polozky.index(force_pol))
+            st.session_state["force_polotovar"] = None
+        else:
+            polotovar = st.selectbox("Polotovar", polozky)
+
         if polotovar != "+ Pridať nový polotovar":
             akost_sel = polotovar.split("]")[0].replace("[", "")
             vybrany_pol = df_filtered[df_filtered["akost"] == akost_sel].iloc[0]
@@ -245,7 +254,7 @@ with col5:
 st.divider()
 
 # ============================
-# BOX – Pridať nový polotovar (možnosť C)
+# BOX – Pridať nový polotovar
 # ============================
 
 if polotovar == "+ Pridať nový polotovar":
@@ -302,6 +311,9 @@ if polotovar == "+ Pridať nový polotovar":
                 )
 
                 if r.status_code == 200:
+                    st.session_state["force_polotovar"] = (
+                        f"[{nova_akost}] {novy_nazov} | {r1}x{r2}x{r3} | Cena: {cena} €/bm"
+                    )
                     st.success("Polotovar bol uložený.")
                     st.cache_data.clear()
                     st.experimental_rerun()
@@ -309,4 +321,5 @@ if polotovar == "+ Pridať nový polotovar":
                     st.error("Nepodarilo sa uložiť polotovar.")
             else:
                 st.error("Vyplň všetky polia.")
+
 
