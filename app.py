@@ -428,7 +428,7 @@ with col1:
     kooperacia = st.checkbox("Koop.", key="koop_checkbox")
 
 with col2:
-    subcategory = urci_subcategory(    akost_vyber[0] if akost_vyber else "",    material,    nazov_mat)
+    subcategory = urci_subcategory(akost_vyber[0] if akost_vyber else "", material, material)
 
 with col3:
     hustota_default = hustoty.get(subcategory, 1000)
