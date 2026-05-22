@@ -541,7 +541,8 @@ with cols[0]:
                 "plocha_m2": [plocha/100],
                 "geom_koef": [l_mm/d_mm if d_mm>0 else 0] if tvar == "KR" else [((s+v)/dp) if dp>0 else 0],
                 "log_pocet_kusov": [np.log1p(pocet_kusov)],
-                "subcategory_clean": [get_valid_subcat(subcategory)]
+                "subcategory_clean": [get_valid_subcat(subcategory)],
+                "v_narocnost": [narocnost]
             })
             st.session_state.predicted_time = round(np.expm1(model.predict(data))[0], 2)
             st.session_state.time_confirmed = False
