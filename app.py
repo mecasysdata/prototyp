@@ -522,11 +522,16 @@ def get_valid_subcat(subcat):
 def get_valid_country(country):
     return country if country in ALLOWED_COUNTRIES else 'OTHER'
 
-# Inicializácia Session State
-for key in ["time_confirmed", "predicted_time", "predicted_price"]:
-    if key not in st.session_state: st.session_state[key] = 0.0 if key != "time_confirmed" else False
 
-# Rozdelenie do 8 stĺpcov pre jeden riadok
+# ========================================================
+# 5. RIADOK – AI PREDIKCIE (FINÁLNA VERZIA)
+# ========================================================
+
+# Inicializácia premenných v session_state (ak ešte neexistujú)
+for key in ["time_confirmed", "predicted_time", "predicted_price"]:
+    if key not in st.session_state: 
+        st.session_state[key] = 0.0 if key != "time_confirmed" else False
+
 cols = st.columns([1, 1.2, 0.8, 1.2, 1, 1.2, 0.8, 1.2])
 
 with cols[0]:
@@ -536,20 +541,32 @@ with cols[0]:
             m_data = load_model_from_drive(model_id, f"model_{tvar.lower()}_cas.pkl")
             model = m_data["model"]
             
-            data = pd.DataFrame({
-                "hmotnost_kg": [hmotnost], 
-                "plocha_m2": [plocha/100],
-                "geom_koef": [l_mm/d_mm if d_mm>0 else 0] if tvar == "KR" else [((s+v)/dp) if dp>0 else 0],
-                "log_pocet_kusov": [np.log1p(pocet_kusov)],
-                "subcategory_clean": [get_valid_subcat(subcategory)],
-                "v_narocnost": [narocnost]
-            })
+            # Definícia dát striktne oddelená podľa tvaru
+            if tvar == "KR":
+                data = pd.DataFrame({
+                    "hmotnost_kg": [hmotnost], "plocha_m2": [plocha/100],
+                    "geom_koef": [l_mm/d_mm if d_mm > 0 else 0],
+                    "log_pocet_kusov": [np.log1p(pocet_kusov)],
+                    "subcategory_clean": [get_valid_subcat(subcategory)],
+                    "v_narocnost": [narocnost]
+                })
+            else: # STV
+                data = pd.DataFrame({
+                    "hmotnost_kg": [hmotnost], "plocha_m2": [plocha/100],
+                    "geom_koef": [((s+v)/dp) if dp > 0 else 0],
+                    "log_pocet_kusov": [np.log1p(pocet_kusov)],
+                    "subcategory_clean": [get_valid_subcat(subcategory)],
+                    "v_narocnost": [narocnost]
+                })
+            
             st.session_state.predicted_time = round(np.expm1(model.predict(data))[0], 2)
             st.session_state.time_confirmed = False
-        except Exception as e: st.error(f"Chyba času: {e}")
+        except Exception as e: 
+            st.error(f"Chyba času: {e}")
 
 with cols[1]:
     vyr_cas_input = st.number_input("Čas (min)", value=st.session_state.predicted_time, step=0.1)
+
 with cols[2]:
     if st.button("✅ Potvrdiť"):
         st.session_state.predicted_time = vyr_cas_input
@@ -562,34 +579,36 @@ with cols[4]:
             m_data = load_model_from_drive(model_id, f"model_{tvar.lower()}_cena.pkl")
             model = m_data["model"]
             
-            # --- DEFINÍCIA KĽÚČA PODĽA MODELU ---
-            # Pre KR model používame veľké písmená, pre STV malé.
-            # Toto je kľúčové miesto, kde sa prispôsobujeme trénovacím dátam modelu.
-            col_name = "SUBCATEGORY_clean" if tvar == "KR" else "subcategory_clean"
+            # Definícia dát striktne oddelená podľa tvaru (vrátane názvoslovia stĺpcov)
+            if tvar == "KR":
+                data_cena = pd.DataFrame({
+                    "hmotnost_kg": [hmotnost], "plocha_m2": [plocha/100],
+                    "geom_koef": [l_mm/d_mm if d_mm > 0 else 0],
+                    "log_pocet_kusov": [np.log1p(pocet_kusov)],
+                    "cena_material_predpoklad": [vstupne_naklady_ks],
+                    "log_cas": [np.log1p(st.session_state.predicted_time)],
+                    "SUBCATEGORY_clean": [get_valid_subcat(subcategory)], # KR vyžaduje veľké
+                    "zakaznik_krajina": [get_valid_country(krajina_input)]
+                })
+            else: # STV
+                data_cena = pd.DataFrame({
+                    "hmotnost_kg": [hmotnost], "plocha_m2": [plocha/100],
+                    "geom_koef": [((s+v)/dp) if dp > 0 else 0],
+                    "log_pocet_kusov": [np.log1p(pocet_kusov)],
+                    "cena_material_predpoklad": [vstupne_naklady_ks],
+                    "log_cas": [np.log1p(st.session_state.predicted_time)],
+                    "subcategory_clean": [get_valid_subcat(subcategory)], # STV vyžaduje malé
+                    "zakaznik_krajina": [get_valid_country(krajina_input)]
+                })
             
-            data_cena = pd.DataFrame({
-                "hmotnost_kg": [hmotnost], 
-                "plocha_m2": [plocha/100],
-                "geom_koef": [l_mm/d_mm if d_mm > 0 else 0] if tvar == "KR" else [((s+v)/dp) if dp > 0 else 0],
-                "log_pocet_kusov": [np.log1p(pocet_kusov)],
-                "cena_material_predpoklad": [vstupne_naklady_ks],
-                "log_cas": [np.log1p(st.session_state.predicted_time)],
-                col_name: [get_valid_subcat(subcategory)], # Použijeme správny kľúč
-                "zakaznik_krajina": [get_valid_country(krajina_input)]
-            })
-            
-            pred_price = np.expm1(model.predict(data_cena))[0]
-            st.session_state.predicted_price = round(pred_price, 2)
+            st.session_state.predicted_price = round(np.expm1(model.predict(data_cena))[0], 2)
         except Exception as e: 
             st.error(f"Chyba ceny: {e}")
-   
 
 with cols[5]:
     vyr_cena_input = st.number_input("Cena (€)", value=st.session_state.predicted_price, step=0.1)
+
 with cols[6]:
     if st.button("💾 Uložiť"):
-        st.success("Uložené")
-
-
         st.success("Uložené")
 
