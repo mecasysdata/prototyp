@@ -7,3 +7,4 @@ category-encoders
 openpyxl
 requests
 gdown
+reportlab
