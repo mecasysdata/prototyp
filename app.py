@@ -496,79 +496,50 @@ with col7:
 st.divider()
 
 # ============================================
-# 5. RIADOK – AI PREDIKCIE (KR/STV)
-# ============================================
-import gdown
-import os
-import joblib
-import numpy as np
+# ========================================================
+# 5. RIADOK – AI PREDIKCIE (STV + KR – FINÁLNA VERZIA)
+# ========================================================
 
+# ID MODELOV (STV a KR)
+ID_MODELS = {
+    "KR": {"CAS": "1Xtqsn4B-go8czEXO99oGsDGgpt8_PUmU", "CENA": "1KwQyinwdW82CM0EN_7UshnDdHtv65X3p"},
+    "STV": {"CAS": "18nIcgJdvfHHN2ToLufUi-PTQwPwYopfW", "CENA": "1IbYUvNlcKwhm7fx-WbLQ5_jtP_hDsVud"}
+}
 
-ID_KR_CENA = "1UT9SQzfWVnONGsPQLwxh8yxE4kJymjam"
-ID_KR_CAS = "1Xtqsn4B-go8czEXO99oGsDGgpt8_PUmU"
+# VALIDÁCIA PRE KR
+KR_ALLOWED_SUBCATS = ['ALLOYED', 'AUST', 'TOOL', 'UNALL', 'ALU', 'POM', 'PE', 'OTHER', 'HSS', 'LOWAL', 'PA', 'BRONZE', 'MART', 'BRASS', 'PEEK', 'FERR', 'PVC', 'PET']
+KR_ALLOWED_COUNTRIES = ['SK', 'FR', 'PT', 'DE', 'SUI', 'EN', 'CZ', 'LAT', 'AT', 'NL', 'SWE', 'HU', 'RO']
 
+def get_valid_kr_subcat(subcat):
+    return subcat if subcat in KR_ALLOWED_SUBCATS else 'OTHER'
 
-@st.cache_resource
-def load_model_from_drive(file_id, local_filename):
-    model_path = os.path.join("/tmp", local_filename)
-    if not os.path.exists(model_path):
-        url = f"https://drive.google.com/uc?id={file_id}"
-        gdown.download(url, model_path, quiet=False)
-    return joblib.load(model_path)
+def get_valid_kr_country(country):
+    return country if country in KR_ALLOWED_COUNTRIES else 'OTHER'
 
-
-def get_clean_subcategory(subcat):
-    allowed = [
-        "ALLOYED",
-        "ALU",
-        "AUST",
-        "BRASS",
-        "BRONZE",
-        "FERR",
-        "HSS",
-        "LOWAL",
-        "MART",
-        "OTHER",
-        "PA",
-        "PE",
-        "PEEK",
-        "PET",
-        "POM",
-        "PVC",
-        "TOOL",
-        "UNALL",
-    ]
-    return subcat if subcat in allowed else "OTHER"
-
-
-if "time_confirmed" not in st.session_state:
-    st.session_state.time_confirmed = False
-if "predicted_time" not in st.session_state:
-    st.session_state.predicted_time = 0.0
-if "predicted_price" not in st.session_state:
-    st.session_state.predicted_price = 0.0
+# Inicializácia Session State
+for key in ["time_confirmed", "predicted_time", "predicted_price"]:
+    if key not in st.session_state: st.session_state[key] = 0.0 if key != "time_confirmed" else False
 
 col_a, col_b, col_c, col_d = st.columns(4)
 
 with col_a:
     if st.button("🚀 Predikuj čas"):
         try:
-            m_data = load_model_from_drive(ID_KR_CAS, "model_kr_cas.pkl")
+            model_id = ID_MODELS[tvar]["CAS"]
+            m_data = load_model_from_drive(model_id, f"model_{tvar.lower()}_cas.pkl")
             model = m_data["model"]
-            data = pd.DataFrame(
-                {
-                    "hmotnost_kg": [hmotnost],
-                    "plocha_m2": [plocha / 100],
-                    "geom_koef": [l_mm / d_mm if d_mm > 0 else 0],
-                    "log_pocet_kusov": [np.log1p(pocet_kusov)],
-                    "subcategory_clean": [get_clean_subcategory(subcategory)],
-                }
-            )
+            
+            # Príprava dát pre čas
+            data = pd.DataFrame({
+                "hmotnost_kg": [hmotnost], "plocha_m2": [plocha/100],
+                "geom_koef": [l_mm/d_mm if d_mm>0 else 0] if tvar == "KR" else [((s+v)/dp) if dp>0 else 0],
+                "log_pocet_kusov": [np.log1p(pocet_kusov)],
+                "subcategory_clean": [get_valid_kr_subcat(subcategory) if tvar == "KR" else subcategory]
+            })
             pred = np.expm1(model.predict(data))[0]
             st.session_state.predicted_time = round(pred, 2)
             st.session_state.time_confirmed = False
-        except Exception as e:
-            st.error(f"Chyba modelu času: {e}")
+        except Exception as e: st.error(f"Chyba modelu času: {e}")
 
 with col_b:
     vyr_cas_input = st.number_input("Výrobný čas (min)", value=st.session_state.predicted_time, step=0.1)
@@ -579,24 +550,23 @@ with col_b:
 with col_c:
     if st.button("💰 Predikuj cenu", disabled=not st.session_state.time_confirmed):
         try:
-            m_data = load_model_from_drive(ID_KR_CENA, "model_kr_cena.pkl")
+            model_id = ID_MODELS[tvar]["CENA"]
+            m_data = load_model_from_drive(model_id, f"model_{tvar.lower()}_cena.pkl")
             model = m_data["model"]
-            data_cena = pd.DataFrame(
-                {
-                    "hmotnost_kg": [hmotnost],
-                    "plocha_m2": [plocha / 100],
-                    "geom_koef": [l_mm / d_mm if d_mm > 0 else 0],
-                    "log_pocet_kusov": [np.log1p(pocet_kusov)],
-                    "cena_material_predpoklad": [vstupne_naklady_ks],
-                    "log_predikovany_cas": [np.log1p(st.session_state.predicted_time)],
-                    "subcategory_clean": [get_clean_subcategory(subcategory)],
-                    "zakaznik_krajina": [krajina_input if isinstance(krajina_input, str) else "Unknown"],
-                }
-            )
+            
+            # Príprava dát pre cenu
+            data_cena = pd.DataFrame({
+                "hmotnost_kg": [hmotnost], "plocha_m2": [plocha/100],
+                "geom_koef": [l_mm/d_mm if d_mm > 0 else 0] if tvar == "KR" else [((s+v)/dp) if dp > 0 else 0],
+                "log_pocet_kusov": [np.log1p(pocet_kusov)],
+                "cena_material_predpoklad": [vstupne_naklady_ks],
+                "log_cas": [np.log1p(st.session_state.predicted_time)], # Používa odsúhlasený čas
+                "subcategory_clean": [get_valid_kr_subcat(subcategory)],
+                "zakaznik_krajina": [get_valid_kr_country(krajina_input)]
+            })
             pred_cena = np.expm1(model.predict(data_cena))[0]
             st.session_state.predicted_price = round(pred_cena, 2)
-        except Exception as e:
-            st.error(f"Chyba modelu ceny: {e}")
+        except Exception as e: st.error(f"Chyba modelu ceny: {e}")
 
 with col_d:
     vyr_cena_input = st.number_input("Predpokladaná cena (€)", value=st.session_state.predicted_price, step=0.1)
