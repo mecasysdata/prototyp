@@ -556,7 +556,6 @@ with cols[2]:
         st.session_state.time_confirmed = True
 
 with cols[4]:
-with cols[4]:
     if st.button("💰 Predikuj cenu", disabled=not st.session_state.time_confirmed):
         try:
             model_id = ID_MODELS[tvar]["CENA"]
