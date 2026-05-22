@@ -561,6 +561,9 @@ with cols[4]:
             model_id = ID_MODELS[tvar]["CENA"]
             m_data = load_model_from_drive(model_id, f"model_{tvar.lower()}_cena.pkl")
             model = m_data["model"]
+
+            # Dynamické nastavenie názvu stĺpca podľa typu tvaru
+            subcat_col_name = "SUBCATEGORY_clean" if tvar == "KR" else "subcategory_clean"
             
             # Dáta pre CENA model (obsahujú krajinu pre oba typy STV aj KR)
             data_cena = pd.DataFrame({
@@ -570,7 +573,7 @@ with cols[4]:
                 "log_pocet_kusov": [np.log1p(pocet_kusov)],
                 "cena_material_predpoklad": [vstupne_naklady_ks],
                 "log_cas": [np.log1p(st.session_state.predicted_time)],
-                "SUBCATEGORY_clean": [get_valid_subcat(subcategory)],
+                subcat_col_name: [get_valid_subcat(subcategory)], # Použijeme dynamický názov,
                 "zakaznik_krajina": [get_valid_country(krajina_input)]
             })
             st.session_state.predicted_price = round(np.expm1(model.predict(data_cena))[0], 2)
