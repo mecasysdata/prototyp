@@ -8,6 +8,14 @@ import os
 import joblib
 import numpy as np
 
+# --- FUNKCIA NA NAČÍTANIE MODELOV ---
+@st.cache_resource
+def load_model_from_drive(file_id, filename):
+    if not os.path.exists(filename):
+        url = f'https://drive.google.com/uc?id={file_id}'
+        gdown.download(url, filename, quiet=False)
+    return joblib.load(filename)
+
 # --- CONFIG ---
 st.set_page_config(layout="wide", page_title="MEC Calculation")
 
