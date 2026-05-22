@@ -896,29 +896,51 @@ def generate_internal_pdf(kosik, cp_nazov, date, zakaznik, krajina, total_price)
 # JEDNO TLAČIDLO – ULOŽIŤ CP + STIAHNUŤ ZIP
 # ========================================================
 
+# ========================================================
+# JEDNO TLAČIDLO – ULOŽIŤ CP + STIAHNUŤ ZIP
+# ========================================================
+
 import zipfile
+
+# 🔒 Poistka – ak sa session_state resetol počas rerunu
+if "kosik" not in st.session_state:
+    st.session_state.kosik = []
 
 if st.session_state.kosik:
 
     def prepare_zip():
+        # Uloženie CP do Google Sheet
         r = requests.post(CP_APP_SCRIPT_URL, json=st.session_state.kosik)
         if r.status_code != 200:
             st.error("Chyba pri ukladaní ponuky do Google Sheet.")
             return None
 
+        # Výpočet celkovej ceny
         df_kosik = pd.DataFrame(st.session_state.kosik)
         total_price = df_kosik["Cena položky spolu (€)"].sum()
 
+        # PDF pre zákazníka
         pdf_customer = generate_customer_pdf(
-            st.session_state.kosik, cp_nazov, date, vybrany,
-            krajina_input, st.session_state.note_text, total_price
+            st.session_state.kosik,
+            cp_nazov,
+            date,
+            vybrany,
+            krajina_input,
+            st.session_state.note_text,
+            total_price
         )
 
+        # Interné PDF (tabuľka – varianta B)
         pdf_internal = generate_internal_pdf(
-            st.session_state.kosik, cp_nazov, date, vybrany,
-            krajina_input, total_price
+            st.session_state.kosik,
+            cp_nazov,
+            date,
+            vybrany,
+            krajina_input,
+            total_price
         )
 
+        # Vytvorenie ZIP balíka
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
             zipf.writestr(f"{cp_nazov}_customer.pdf", pdf_customer.getvalue())
@@ -927,9 +949,11 @@ if st.session_state.kosik:
         zip_buffer.seek(0)
         return zip_buffer
 
+    # Tlačidlo na stiahnutie ZIP
     st.download_button(
         label="💾 Uložiť CP + stiahnuť ZIP",
         data=prepare_zip,
         file_name=f"{cp_nazov}_PDF_balík.zip",
         mime="application/zip"
     )
+
