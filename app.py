@@ -528,84 +528,79 @@ VALID_MAP = {
 
 cols = st.columns([1, 1.2, 0.8, 1.2, 1, 1.2, 0.8, 1.2])
 
-# --- 1. PREDPOVEĎ ČASU ---
+# --- PREDPOVEĎ ČASU ---
 with cols[0]:
     if st.button("🚀 Predikuj čas"):
         try:
             model = load_model_from_drive(ID_MODELS[tvar]["CAS"], f"model_{tvar.lower()}_cas.pkl")["model"]
             
             if tvar == "KR":
-                sub_val = subcategory if subcategory in VALID_MAP["KR"]["CAS"]["SUBCATS"] else 'OTHER'
                 data = pd.DataFrame({
                     "hmotnost_kg": [hmotnost], "plocha_m2": [plocha/100],
                     "geom_koef": [l_mm/d_mm if d_mm > 0 else 0],
                     "log_pocet_kusov": [np.log1p(pocet_kusov)],
-                    "subcategory_clean": [sub_val],
-                    "v_narocnost": [narocnost]
+                    "subcategory_clean": [get_valid_subcat(subcategory)],
+                    "narocnost": [narocnost]
                 })
             else: # STV
-                sub_val = subcategory if subcategory in VALID_MAP["STV"]["CAS"]["SUBCATS"] else 'OTHER'
                 data = pd.DataFrame({
                     "hmotnost_kg": [hmotnost], "plocha_m2": [plocha/100],
                     "geom_koef": [((s+v)/dp) if dp > 0 else 0],
                     "log_pocet_kusov": [np.log1p(pocet_kusov)],
-                    "subcategory_clean": [sub_val],
-                    "v_narocnost": [narocnost]
+                    "subcategory_clean": [get_valid_subcat(subcategory)],
+                    "narocnost": [narocnost]
                 })
             
             st.session_state.predicted_time = round(np.expm1(model.predict(data))[0], 2)
-            st.session_state.confirmed_time = None # Reset potvrdenia
+            st.session_state.time_confirmed = False
             st.rerun()
         except Exception as e: st.error(f"Chyba času: {e}")
 
 # Zobrazenie a potvrdenie času
-if st.session_state.get("predicted_time") is not None:
+if st.session_state.predicted_time > 0:
     with cols[1]:
         st.info(f"Čas: {st.session_state.predicted_time} h")
-        if st.button("✅ Potvrdiť"):
-            st.session_state.confirmed_time = st.session_state.predicted_time
+        if st.button("✅ Potvrdiť čas"):
+            st.session_state.time_confirmed = True
             st.rerun()
 
-# --- 2. PREDPOVEĎ CENY ---
+# --- PREDPOVEĎ CENY ---
 with cols[4]:
-    # Tlačidlo ceny je aktívne až keď je confirmed_time potvrdený
-    is_confirmed = st.session_state.get("confirmed_time") is not None
-    if st.button("💰 Predikuj cenu", disabled=not is_confirmed):
+    if st.button("💰 Predikuj cenu", disabled=not st.session_state.time_confirmed):
         try:
             model = load_model_from_drive(ID_MODELS[tvar]["CENA"], f"model_{tvar.lower()}_cena.pkl")["model"]
             
             if tvar == "KR":
-                sub_val = subcategory if subcategory in VALID_MAP["KR"]["CENA"]["SUBCATS"] else 'OTHER'
-                coun_val = krajina_input if krajina_input in VALID_MAP["KR"]["CENA"]["COUNTRIES"] else 'OTHER'
+                # KR model explicitne vyžaduje "SUBCATEGORY_clean" (veľké)
                 data_cena = pd.DataFrame({
                     "hmotnost_kg": [hmotnost], "plocha_m2": [plocha/100],
                     "geom_koef": [l_mm/d_mm if d_mm > 0 else 0],
                     "log_pocet_kusov": [np.log1p(pocet_kusov)],
                     "cena_material_predpoklad": [vstupne_naklady_ks],
-                    "log_cas": [np.log1p(st.session_state.confirmed_time)],
-                    "SUBCATEGORY_clean": [sub_val],
-                    "zakaznik_krajina": [coun_val]
+                    "log_cas": [np.log1p(st.session_state.predicted_time)],
+                    "SUBCATEGORY_clean": [get_valid_subcat(subcategory)],
+                    "zakaznik_krajina": [get_valid_country(krajina_input)]
                 })
             else: # STV
-                sub_val = subcategory if subcategory in VALID_MAP["STV"]["CENA"]["SUBCATS"] else 'OTHER'
-                coun_val = krajina_input if krajina_input in VALID_MAP["STV"]["CENA"]["COUNTRIES"] else 'OTHER'
+                # STV model explicitne vyžaduje "subcategory_clean" (malé)
                 data_cena = pd.DataFrame({
                     "hmotnost_kg": [hmotnost], "plocha_m2": [plocha/100],
                     "geom_koef": [((s+v)/dp) if dp > 0 else 0],
                     "log_pocet_kusov": [np.log1p(pocet_kusov)],
                     "cena_material_predpoklad": [vstupne_naklady_ks],
-                    "log_cas": [np.log1p(st.session_state.confirmed_time)],
-                    "subcategory_clean": [sub_val],
-                    "zakaznik_krajina": [coun_val]
+                    "log_cas": [np.log1p(st.session_state.predicted_time)],
+                    "subcategory_clean": [get_valid_subcat(subcategory)],
+                    "zakaznik_krajina": [get_valid_country(krajina_input)]
                 })
             
             st.session_state.predicted_price = round(np.expm1(model.predict(data_cena))[0], 2)
             st.rerun()
         except Exception as e: st.error(f"Chyba ceny: {e}")
 
-if st.session_state.get("predicted_price"):
+if st.session_state.predicted_price > 0:
     with cols[5]:
         st.success(f"Cena: {st.session_state.predicted_price} €")
+
 
 
 
