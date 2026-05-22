@@ -891,24 +891,20 @@ def generate_internal_pdf(kosik, cp_nazov, date, zakaznik, krajina, total_price)
     buffer.seek(0)
     return buffer
 
-
 # ========================================================
-# JEDNO TLAČIDLO – ULOŽIŤ CP + STIAHNUŤ ZIP
-# ========================================================
-
 # ========================================================
 # JEDNO TLAČIDLO – ULOŽIŤ CP + STIAHNUŤ ZIP
 # ========================================================
 
 import zipfile
 
-# 🔒 Poistka – ak sa session_state resetol počas rerunu
+# Poistka – ak by sa session_state resetol
 if "kosik" not in st.session_state:
     st.session_state.kosik = []
 
 if st.session_state.kosik:
 
-    def prepare_zip():
+    def prepare_zip() -> io.BytesIO | None:
         # Uloženie CP do Google Sheet
         r = requests.post(CP_APP_SCRIPT_URL, json=st.session_state.kosik)
         if r.status_code != 200:
@@ -930,7 +926,7 @@ if st.session_state.kosik:
             total_price
         )
 
-        # Interné PDF (tabuľka – varianta B)
+        # Interné PDF
         pdf_internal = generate_internal_pdf(
             st.session_state.kosik,
             cp_nazov,
@@ -949,11 +945,14 @@ if st.session_state.kosik:
         zip_buffer.seek(0)
         return zip_buffer
 
-    # Tlačidlo na stiahnutie ZIP
-    st.download_button(
-        label="💾 Uložiť CP + stiahnuť ZIP",
-        data=prepare_zip,
-        file_name=f"{cp_nazov}_PDF_balík.zip",
-        mime="application/zip"
-    )
+    zip_data = prepare_zip()
+    if zip_data is not None:
+        st.download_button(
+            label="💾 Uložiť CP + stiahnuť ZIP",
+            data=zip_data,
+            file_name=f"{cp_nazov}_PDF_balík.zip",
+            mime="application/zip"
+        )
+
+
 
