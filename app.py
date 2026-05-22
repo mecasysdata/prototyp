@@ -915,21 +915,24 @@ def generate_internal_pdf(kosik, cp_nazov, date, zakaznik, krajina, total_price)
     return buffer
 
 # ============================
-# TLAČIDLO – ULOŽIŤ CP + GENEROVAŤ PDF
+# TLAČIDLO – ULOŽIŤ CP + GENEROVAŤ ZIP
 # ============================
 
+import zipfile
+
 if st.session_state.kosik:
-    if st.button("💾 Uložiť ponuku do Sheet + vygenerovať PDF"):
+    if st.button("💾 Uložiť ponuku do Sheet + stiahnuť ZIP"):
         try:
-            # Uloženie do Google Sheet (Apps Script pre CP)
+            # 1) Uloženie do Google Sheet (Apps Script pre CP)
             r = requests.post(CP_APP_SCRIPT_URL, json=st.session_state.kosik)
+
             if r.status_code == 200:
                 st.success("Ponuka bola uložená do Google Sheet.")
 
                 df_kosik = pd.DataFrame(st.session_state.kosik)
                 total_price = df_kosik["Cena položky spolu (€)"].sum()
 
-                # PDF pre zákazníka
+                # 2) Vygenerovanie PDF pre zákazníka
                 pdf_customer = generate_customer_pdf(
                     st.session_state.kosik,
                     cp_nazov,
@@ -940,7 +943,7 @@ if st.session_state.kosik:
                     total_price
                 )
 
-                # PDF interné
+                # 3) Vygenerovanie PDF pre interné účely
                 pdf_internal = generate_internal_pdf(
                     st.session_state.kosik,
                     cp_nazov,
@@ -950,21 +953,24 @@ if st.session_state.kosik:
                     total_price
                 )
 
-                st.download_button(
-                    label="⬇️ Stiahnuť PDF – zákazník",
-                    data=pdf_customer,
-                    file_name=f"{cp_nazov}_customer.pdf",
-                    mime="application/pdf"
-                )
+                # 4) Vytvorenie ZIP archívu v pamäti
+                zip_buffer = io.BytesIO()
+                with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+                    zipf.writestr(f"{cp_nazov}_customer.pdf", pdf_customer.getvalue())
+                    zipf.writestr(f"{cp_nazov}_internal.pdf", pdf_internal.getvalue())
 
+                zip_buffer.seek(0)
+
+                # 5) Jeden jediný download button
                 st.download_button(
-                    label="⬇️ Stiahnuť PDF – interné",
-                    data=pdf_internal,
-                    file_name=f"{cp_nazov}_internal.pdf",
-                    mime="application/pdf"
+                    label="⬇️ Stiahnuť ZIP s PDF",
+                    data=zip_buffer,
+                    file_name=f"{cp_nazov}_PDF_balík.zip",
+                    mime="application/zip"
                 )
 
             else:
                 st.error("Chyba pri ukladaní ponuky do Google Sheet.")
+
         except Exception as e:
-            st.error(f"Chyba pri ukladaní alebo generovaní PDF: {e}")
+            st.error(f"Chyba pri ukladaní alebo generovaní ZIP: {e}")
