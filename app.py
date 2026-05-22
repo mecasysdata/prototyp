@@ -556,16 +556,18 @@ with cols[2]:
         st.session_state.time_confirmed = True
 
 with cols[4]:
+with cols[4]:
     if st.button("💰 Predikuj cenu", disabled=not st.session_state.time_confirmed):
         try:
             model_id = ID_MODELS[tvar]["CENA"]
             m_data = load_model_from_drive(model_id, f"model_{tvar.lower()}_cena.pkl")
             model = m_data["model"]
-
-            # Dynamické nastavenie názvu stĺpca podľa typu tvaru
-            subcat_col_name = "SUBCATEGORY_clean" if tvar == "KR" else "subcategory_clean"
             
-            # Dáta pre CENA model (obsahujú krajinu pre oba typy STV aj KR)
+            # --- DEFINÍCIA KĽÚČA PODĽA MODELU ---
+            # Pre KR model používame veľké písmená, pre STV malé.
+            # Toto je kľúčové miesto, kde sa prispôsobujeme trénovacím dátam modelu.
+            col_name = "SUBCATEGORY_clean" if tvar == "KR" else "subcategory_clean"
+            
             data_cena = pd.DataFrame({
                 "hmotnost_kg": [hmotnost], 
                 "plocha_m2": [plocha/100],
@@ -573,11 +575,15 @@ with cols[4]:
                 "log_pocet_kusov": [np.log1p(pocet_kusov)],
                 "cena_material_predpoklad": [vstupne_naklady_ks],
                 "log_cas": [np.log1p(st.session_state.predicted_time)],
-                subcat_col_name: [get_valid_subcat(subcategory)], # Použijeme dynamický názov,
+                col_name: [get_valid_subcat(subcategory)], # Použijeme správny kľúč
                 "zakaznik_krajina": [get_valid_country(krajina_input)]
             })
-            st.session_state.predicted_price = round(np.expm1(model.predict(data_cena))[0], 2)
-        except Exception as e: st.error(f"Chyba ceny: {e}")
+            
+            pred_price = np.expm1(model.predict(data_cena))[0]
+            st.session_state.predicted_price = round(pred_price, 2)
+        except Exception as e: 
+            st.error(f"Chyba ceny: {e}")
+   
 
 with cols[5]:
     vyr_cena_input = st.number_input("Cena (€)", value=st.session_state.predicted_price, step=0.1)
