@@ -512,103 +512,80 @@ ID_MODELS = {
     "STV": {"CAS": "18nIcgJdvfHHN2ToLufUi-PTQwPwYopfW", "CENA": "1IbYUvNlcKwhm7fx-WbLQ5_jtP_hDsVud"}
 }
 
-# VALIDÁCIA (Univerzálna pre KR aj STV podľa dohody)
-ALLOWED_SUBCATS = ['ALLOYED', 'AUST', 'TOOL', 'UNALL', 'ALU', 'POM', 'PE', 'OTHER', 'HSS', 'LOWAL', 'PA', 'BRONZE', 'MART', 'BRASS', 'PEEK', 'FERR', 'PVC', 'PET']
-ALLOWED_COUNTRIES = ['SK', 'FR', 'PT', 'DE', 'SUI', 'EN', 'CZ', 'LAT', 'AT', 'NL', 'SWE', 'HU', 'RO']
 
-def get_valid_subcat(subcat):
-    return subcat if subcat in ALLOWED_SUBCATS else 'OTHER'
-
-def get_valid_country(country):
-    return country if country in ALLOWED_COUNTRIES else 'OTHER'
-
-
-# ========================================================
-# 5. RIADOK – AI PREDIKCIE (FINÁLNA VERZIA)
-# ========================================================
-
-# Inicializácia premenných v session_state (ak ešte neexistujú)
-for key in ["time_confirmed", "predicted_time", "predicted_price"]:
-    if key not in st.session_state: 
-        st.session_state[key] = 0.0 if key != "time_confirmed" else False
+VALID_MAP = {
+    "KR": {
+        "CAS": {"SUBCATS": ['LOWAL', 'TOOL', 'BRASS', 'ALU', 'UNALL', 'AUST', 'ALLOYED', 'PET', 'FERR', 'HSS', 'BRONZE', 'POM', 'MART', 'PA', 'OTHER', 'PE', 'PEEK', 'PVC']},
+        "CENA": {"SUBCATS": ['ALLOYED', 'AUST', 'TOOL', 'UNALL', 'ALU', 'POM', 'PE', 'OTHER', 'HSS', 'LOWAL', 'PA', 'BRONZE', 'MART', 'BRASS', 'PEEK', 'FERR', 'PVC', 'PET'],
+                 "COUNTRIES": ['SK', 'FR', 'PT', 'DE', 'SUI', 'EN', 'CZ', 'LAT', 'AT', 'NL', 'SWE', 'HU', 'RO']}
+    },
+    "STV": {
+        "CAS": {"SUBCATS": ['ALU', 'TOOL', 'UNALL', 'ALLOYED', 'POM', 'AUST', 'FERR', 'DUPX', 'BRONZE', 'PA', 'OTHER', 'PET']},
+        "CENA": {"SUBCATS": ['AUST', 'ALU', 'DUPX', 'UNALL', 'TOOL', 'OTHER_SUBCAT', 'ALLOYED', 'BRASS', 'BRONZE', 'PA', 'POM', 'FERR', 'PET'],
+                 "COUNTRIES": ['SK', 'FR', 'DE', 'CZ', 'SUI', 'PT', 'LAT', 'EN', 'CN', 'HU', 'RO', 'Unknown']}
+    }
+}
 
 cols = st.columns([1, 1.2, 0.8, 1.2, 1, 1.2, 0.8, 1.2])
 
+# --- 1. PREDPOVEĎ ČASU ---
 with cols[0]:
     if st.button("🚀 Predikuj čas"):
         try:
-            model_id = ID_MODELS[tvar]["CAS"]
-            m_data = load_model_from_drive(model_id, f"model_{tvar.lower()}_cas.pkl")
-            model = m_data["model"]
+            model = load_model_from_drive(ID_MODELS[tvar]["CAS"], f"model_{tvar.lower()}_cas.pkl")["model"]
             
-            # Definícia dát striktne oddelená podľa tvaru
+            # Unikátna logika podľa tvaru
             if tvar == "KR":
+                sub_val = subcategory if subcategory in VALID_MAP["KR"]["CAS"]["SUBCATS"] else 'OTHER'
                 data = pd.DataFrame({
                     "hmotnost_kg": [hmotnost], "plocha_m2": [plocha/100],
                     "geom_koef": [l_mm/d_mm if d_mm > 0 else 0],
                     "log_pocet_kusov": [np.log1p(pocet_kusov)],
-                    "subcategory_clean": [get_valid_subcat(subcategory)],
+                    "subcategory_clean": [sub_val], 
                     "v_narocnost": [narocnost]
                 })
             else: # STV
+                sub_val = subcategory if subcategory in VALID_MAP["STV"]["CAS"]["SUBCATS"] else 'OTHER'
                 data = pd.DataFrame({
                     "hmotnost_kg": [hmotnost], "plocha_m2": [plocha/100],
                     "geom_koef": [((s+v)/dp) if dp > 0 else 0],
                     "log_pocet_kusov": [np.log1p(pocet_kusov)],
-                    "subcategory_clean": [get_valid_subcat(subcategory)],
+                    "subcategory_clean": [sub_val],
                     "v_narocnost": [narocnost]
                 })
-            
             st.session_state.predicted_time = round(np.expm1(model.predict(data))[0], 2)
             st.session_state.time_confirmed = False
-        except Exception as e: 
-            st.error(f"Chyba času: {e}")
+        except Exception as e: st.error(f"Chyba času: {e}")
 
-with cols[1]:
-    vyr_cas_input = st.number_input("Čas (min)", value=st.session_state.predicted_time, step=0.1)
-
-with cols[2]:
-    if st.button("✅ Potvrdiť"):
-        st.session_state.predicted_time = vyr_cas_input
-        st.session_state.time_confirmed = True
-
+# --- 2. PREDPOVEĎ CENY ---
 with cols[4]:
     if st.button("💰 Predikuj cenu", disabled=not st.session_state.time_confirmed):
         try:
-            model_id = ID_MODELS[tvar]["CENA"]
-            m_data = load_model_from_drive(model_id, f"model_{tvar.lower()}_cena.pkl")
-            model = m_data["model"]
+            model = load_model_from_drive(ID_MODELS[tvar]["CENA"], f"model_{tvar.lower()}_cena.pkl")["model"]
             
-            # Definícia dát striktne oddelená podľa tvaru (vrátane názvoslovia stĺpcov)
             if tvar == "KR":
+                sub_val = subcategory if subcategory in VALID_MAP["KR"]["CENA"]["SUBCATS"] else 'OTHER'
+                coun_val = krajina_input if krajina_input in VALID_MAP["KR"]["CENA"]["COUNTRIES"] else 'OTHER'
                 data_cena = pd.DataFrame({
                     "hmotnost_kg": [hmotnost], "plocha_m2": [plocha/100],
                     "geom_koef": [l_mm/d_mm if d_mm > 0 else 0],
                     "log_pocet_kusov": [np.log1p(pocet_kusov)],
                     "cena_material_predpoklad": [vstupne_naklady_ks],
                     "log_cas": [np.log1p(st.session_state.predicted_time)],
-                    "SUBCATEGORY_clean": [get_valid_subcat(subcategory)], # KR vyžaduje veľké
-                    "zakaznik_krajina": [get_valid_country(krajina_input)]
+                    "SUBCATEGORY_clean": [sub_val],
+                    "zakaznik_krajina": [coun_val]
                 })
             else: # STV
+                sub_val = subcategory if subcategory in VALID_MAP["STV"]["CENA"]["SUBCATS"] else 'OTHER'
+                coun_val = krajina_input if krajina_input in VALID_MAP["STV"]["CENA"]["COUNTRIES"] else 'OTHER'
                 data_cena = pd.DataFrame({
                     "hmotnost_kg": [hmotnost], "plocha_m2": [plocha/100],
                     "geom_koef": [((s+v)/dp) if dp > 0 else 0],
                     "log_pocet_kusov": [np.log1p(pocet_kusov)],
                     "cena_material_predpoklad": [vstupne_naklady_ks],
                     "log_cas": [np.log1p(st.session_state.predicted_time)],
-                    "subcategory_clean": [get_valid_subcat(subcategory)], # STV vyžaduje malé
-                    "zakaznik_krajina": [get_valid_country(krajina_input)]
+                    "subcategory_clean": [sub_val],
+                    "zakaznik_krajina": [coun_val]
                 })
-            
             st.session_state.predicted_price = round(np.expm1(model.predict(data_cena))[0], 2)
-        except Exception as e: 
-            st.error(f"Chyba ceny: {e}")
-
-with cols[5]:
-    vyr_cena_input = st.number_input("Cena (€)", value=st.session_state.predicted_price, step=0.1)
-
-with cols[6]:
-    if st.button("💾 Uložiť"):
-        st.success("Uložené")
-
+        except Exception as e: st.error(f"Chyba ceny: {e}")
