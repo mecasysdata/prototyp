@@ -512,92 +512,166 @@ ID_MODELS = {
     "STV": {"CAS": "18nIcgJdvfHHN2ToLufUi-PTQwPwYopfW", "CENA": "1IbYUvNlcKwhm7fx-WbLQ5_jtP_hDsVud"}
 }
 
+# ========================================================
+# 5. RIADOK – AI PREDIKCIE (FINALIZOVANÁ LOGIKA)
+# ========================================================
 
+# --- VALID MAP PODĽA TVOJICH ZOZNAMOV ---
 VALID_MAP = {
-    "KR": {
-        "CAS": {"SUBCATS": ['LOWAL', 'TOOL', 'BRASS', 'ALU', 'UNALL', 'AUST', 'ALLOYED', 'PET', 'FERR', 'HSS', 'BRONZE', 'POM', 'MART', 'PA', 'OTHER', 'PE', 'PEEK', 'PVC']},
-        "CENA": {"SUBCATS": ['ALLOYED', 'AUST', 'TOOL', 'UNALL', 'ALU', 'POM', 'PE', 'OTHER', 'HSS', 'LOWAL', 'PA', 'BRONZE', 'MART', 'BRASS', 'PEEK', 'FERR', 'PVC', 'PET'],
-                 "COUNTRIES": ['SK', 'FR', 'PT', 'DE', 'SUI', 'EN', 'CZ', 'LAT', 'AT', 'NL', 'SWE', 'HU', 'RO']}
-    },
     "STV": {
-        "CAS": {"SUBCATS": ['ALU', 'TOOL', 'UNALL', 'ALLOYED', 'POM', 'AUST', 'FERR', 'DUPX', 'BRONZE', 'PA', 'OTHER', 'PET']},
-        "CENA": {"SUBCATS": ['AUST', 'ALU', 'DUPX', 'UNALL', 'TOOL', 'OTHER_SUBCAT', 'ALLOYED', 'BRASS', 'BRONZE', 'PA', 'POM', 'FERR', 'PET'],
-                 "COUNTRIES": ['SK', 'FR', 'DE', 'CZ', 'SUI', 'PT', 'LAT', 'EN', 'CN', 'HU', 'RO', 'Unknown']}
+        "CAS": {
+            "SUBCATS": [
+                'ALU', 'TOOL', 'UNALL', 'ALLOYED', 'POM',
+                'AUST', 'FERR', 'DUPX', 'BRONZE', 'PA',
+                'OTHER', 'PET'
+            ]
+        },
+        "CENA": {
+            "SUBCATS": [
+                'AUST', 'ALU', 'DUPX', 'UNALL', 'TOOL',
+                'OTHER_SUBCAT', 'ALLOYED', 'BRASS', 'BRONZE',
+                'PA', 'POM', 'FERR', 'PET'
+            ],
+            "COUNTRIES": [
+                'SK', 'FR', 'DE', 'CZ', 'SUI', 'PT', 'LAT',
+                'EN', 'CN', 'HU', 'RO', 'Unknown'
+            ]
+        }
+    },
+
+    "KR": {
+        "CAS": {
+            "SUBCATS": [
+                'LOWAL', 'TOOL', 'BRASS', 'ALU', 'UNALL',
+                'AUST', 'ALLOYED', 'PET', 'FERR', 'HSS',
+                'BRONZE', 'POM', 'MART', 'PA', 'OTHER',
+                'PE', 'PEEK', 'PVC'
+            ]
+        },
+        "CENA": {
+            "SUBCATS": [
+                'ALLOYED', 'AUST', 'TOOL', 'UNALL', 'ALU',
+                'POM', 'PE', 'OTHER', 'HSS', 'LOWAL', 'PA',
+                'BRONZE', 'MART', 'BRASS', 'PEEK', 'FERR',
+                'PVC', 'PET'
+            ],
+            "COUNTRIES": [
+                'SK', 'FR', 'PT', 'DE', 'SUI', 'EN', 'CZ',
+                'LAT', 'AT', 'NL', 'SWE', 'HU', 'RO'
+            ]
+        }
     }
 }
 
+# --- FUNKCIE NA VALIDÁCIU ---
+def get_valid_subcat(subcat):
+    allowed = VALID_MAP[tvar]["CAS"]["SUBCATS"]  # pre čas aj cenu rovnaké subcats
+    return subcat if subcat in allowed else "OTHER"
+
+def get_valid_country(country):
+    allowed = VALID_MAP[tvar]["CENA"]["COUNTRIES"]
+    c = str(country).strip().upper()
+    return c if c in allowed else "Unknown"
+
+
+# --- ID MODELOV ---
+ID_MODELOV = {
+    "KR": {"CAS": "1Xtqsn4B-go8czEXO99oGsDGgpt8_PUmU", "CENA": "1KwQyinwdW82CM0EN_7UshnDdHtv65X3p"},
+    "STV": {"CAS": "18nIcgJdvfHHN2ToLufUi-PTQwPwYopfW", "CENA": "1IbYUvNlcKwhm7fx-WbLQ5_jtP_hDsVud"}
+}
+
+
 cols = st.columns([1, 1.2, 0.8, 1.2, 1, 1.2, 0.8, 1.2])
 
-# --- PREDPOVEĎ ČASU ---
+
+# ========================================================
+# 1) PREDIKCIA ČASU
+# ========================================================
 with cols[0]:
     if st.button("🚀 Predikuj čas"):
         try:
-            model = load_model_from_drive(ID_MODELS[tvar]["CAS"], f"model_{tvar.lower()}_cas.pkl")["model"]
-            
+            model = load_model_from_drive(ID_MODELOV[tvar]["CAS"], f"model_{tvar.lower()}_cas.pkl")["model"]
+
             if tvar == "KR":
                 data = pd.DataFrame({
-                    "hmotnost_kg": [hmotnost], "plocha_m2": [plocha/100],
-                    "geom_koef": [l_mm/d_mm if d_mm > 0 else 0],
+                    "hmotnost_kg": [hmotnost],
+                    "plocha_m2": [plocha / 100],
+                    "geom_koef": [l_mm / d_mm if d_mm > 0 else 0],
                     "log_pocet_kusov": [np.log1p(pocet_kusov)],
                     "subcategory_clean": [get_valid_subcat(subcategory)],
                     "narocnost": [narocnost]
                 })
-            else: # STV
+            else:  # STV
                 data = pd.DataFrame({
-                    "hmotnost_kg": [hmotnost], "plocha_m2": [plocha/100],
-                    "geom_koef": [((s+v)/dp) if dp > 0 else 0],
+                    "hmotnost_kg": [hmotnost],
+                    "plocha_m2": [plocha / 100],
+                    "geom_koef": [((s + v) / dp) if dp > 0 else 0],
                     "log_pocet_kusov": [np.log1p(pocet_kusov)],
                     "subcategory_clean": [get_valid_subcat(subcategory)],
                     "narocnost": [narocnost]
                 })
-            
+
             st.session_state.predicted_time = round(np.expm1(model.predict(data))[0], 2)
             st.session_state.time_confirmed = False
             st.rerun()
-        except Exception as e: st.error(f"Chyba času: {e}")
 
-# Zobrazenie a potvrdenie času
-if st.session_state.predicted_time > 0:
+        except Exception as e:
+            st.error(f"Chyba času: {e}")
+
+
+# --- Zobrazenie a potvrdenie času ---
+if st.session_state.get("predicted_time", 0) > 0:
     with cols[1]:
         st.info(f"Čas: {st.session_state.predicted_time} h")
+
+        new_time = st.number_input("Uprav čas (h)", value=st.session_state.predicted_time, step=0.1)
+
         if st.button("✅ Potvrdiť čas"):
+            st.session_state.predicted_time = new_time
             st.session_state.time_confirmed = True
             st.rerun()
 
-# --- PREDPOVEĎ CENY ---
+
+# ========================================================
+# 2) PREDIKCIA CENY
+# ========================================================
 with cols[4]:
-    if st.button("💰 Predikuj cenu", disabled=not st.session_state.time_confirmed):
+    if st.button("💰 Predikuj cenu", disabled=not st.session_state.get("time_confirmed", False)):
         try:
-            model = load_model_from_drive(ID_MODELS[tvar]["CENA"], f"model_{tvar.lower()}_cena.pkl")["model"]
-            
+            model = load_model_from_drive(ID_MODELOV[tvar]["CENA"], f"model_{tvar.lower()}_cena.pkl")["model"]
+
             if tvar == "KR":
-                # KR model explicitne vyžaduje "SUBCATEGORY_clean" (veľké)
                 data_cena = pd.DataFrame({
-                    "hmotnost_kg": [hmotnost], "plocha_m2": [plocha/100],
-                    "geom_koef": [l_mm/d_mm if d_mm > 0 else 0],
+                    "hmotnost_kg": [hmotnost],
+                    "plocha_m2": [plocha / 100],
+                    "geom_koef": [l_mm / d_mm if d_mm > 0 else 0],
                     "log_pocet_kusov": [np.log1p(pocet_kusov)],
                     "cena_material_predpoklad": [vstupne_naklady_ks],
                     "log_cas": [np.log1p(st.session_state.predicted_time)],
                     "SUBCATEGORY_clean": [get_valid_subcat(subcategory)],
                     "zakaznik_krajina": [get_valid_country(krajina_input)]
                 })
-            else: # STV
-                # STV model explicitne vyžaduje "subcategory_clean" (malé)
+            else:  # STV
                 data_cena = pd.DataFrame({
-                    "hmotnost_kg": [hmotnost], "plocha_m2": [plocha/100],
-                    "geom_koef": [((s+v)/dp) if dp > 0 else 0],
+                    "hmotnost_kg": [hmotnost],
+                    "plocha_m2": [plocha / 100],
+                    "geom_koef": [((s + v) / dp) if dp > 0 else 0],
                     "log_pocet_kusov": [np.log1p(pocet_kusov)],
                     "cena_material_predpoklad": [vstupne_naklady_ks],
                     "log_cas": [np.log1p(st.session_state.predicted_time)],
                     "subcategory_clean": [get_valid_subcat(subcategory)],
                     "zakaznik_krajina": [get_valid_country(krajina_input)]
                 })
-            
+
             st.session_state.predicted_price = round(np.expm1(model.predict(data_cena))[0], 2)
             st.rerun()
-        except Exception as e: st.error(f"Chyba ceny: {e}")
 
-if st.session_state.predicted_price > 0:
+        except Exception as e:
+            st.error(f"Chyba ceny: {e}")
+
+
+# --- Zobrazenie ceny ---
+if st.session_state.get("predicted_price", 0) > 0:
     with cols[5]:
         st.success(f"Cena: {st.session_state.predicted_price} €")
 
