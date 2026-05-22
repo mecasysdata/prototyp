@@ -7,6 +7,9 @@ import gdown
 import os
 import joblib
 import numpy as np
+import io
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 
 # --- FUNKCIA NA NAČÍTANIE MODELOV ---
 @st.cache_resource
@@ -22,6 +25,25 @@ st.set_page_config(layout="wide", page_title="MEC Calculation")
 # --- CONSTANTS ---
 SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSuHQWbpryWNerWr8aKKheHbzTPhXI6lS7YH1sL5zwFIIzLfpTZz47acY_ua2e_fVqEcfxMBe5wnjue/pub?gid=0&single=true&output=csv"
 APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNR33wxSNXJFo9-o2otM-mdKQE22s3i3y5n08dY7eogGhhKDTasiPn3zaOoSihppTq/exec"
+
+# Apps Script pre ukladanie CP (ten, čo si posielala pre Hárok1)
+CP_APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwx7sAeUheQf1dm2r6k7jTslD9ufhq2yk1OWZXWjxVkeZOttVI949GIiPGx8l1B3cIP/exec"
+
+# --- INIT SESSION STATE ---
+if "predicted_time" not in st.session_state:
+    st.session_state.predicted_time = 0.0
+if "time_confirmed" not in st.session_state:
+    st.session_state.time_confirmed = False
+if "predicted_price" not in st.session_state:
+    st.session_state.predicted_price = 0.0
+if "price_confirmed" not in st.session_state:
+    st.session_state.price_confirmed = False
+if "kosik" not in st.session_state:
+    st.session_state.kosik = []
+if "last_item_name" not in st.session_state:
+    st.session_state.last_item_name = ""
+if "note_text" not in st.session_state:
+    st.session_state.note_text = ""
 
 # --- LOGO A NÁZOV ---
 col_logo, col_title = st.columns([1, 5])
@@ -639,6 +661,7 @@ with cols[4]:
                 })
 
             st.session_state.predicted_price = round(np.expm1(model.predict(data_cena))[0], 2)
+            st.session_state.price_confirmed = False
             st.rerun()
         except Exception as e:
             st.error(f"Chyba ceny: {e}")
@@ -646,3 +669,302 @@ with cols[4]:
 if st.session_state.get("predicted_price", 0) > 0:
     with cols[5]:
         st.success(f"Cena: {st.session_state.predicted_price} €")
+        new_price = st.number_input("Uprav cenu (€/ks)", value=st.session_state.predicted_price, step=0.1)
+        if st.button("✅ Potvrdiť cenu"):
+            st.session_state.predicted_price = new_price
+            st.session_state.price_confirmed = True
+            st.rerun()
+
+# ========================================================
+# KOŠÍK + PDF + ULOŽENIE DO SHEETU
+# ========================================================
+
+# Funkcia na vytvorenie riadku pre CP sheet
+def vytvor_cp_riadok():
+    cas_min = round(st.session_state.predicted_time * 60, 2)
+    jednotkova_cena = st.session_state.predicted_price
+    cena_polozky_spolu = round(jednotkova_cena * pocet_kusov, 2)
+
+    riadok = {
+        "Dátum CP": date.strftime("%d.%m.%Y"),
+        "Číslo CP": cp_nazov,
+        "Zákazník": vybrany,
+        "Krajina": krajina_input,
+        "Lojalita": "",
+        "ITEM": item,
+        "Tvar": tvar,
+        "Materiál": material,
+        "Akosť": ", ".join(akost_vyber) if akost_vyber else "",
+        "Rozmer D / DP": dp if tvar == "STV" else d_mm,
+        "Rozmer L / S": s if tvar == "STV" else l_mm,
+        "Rozmer V": v if tvar == "STV" else 0.0,
+        "Hustota": hustota,
+        "Hmotnosť kusu (kg)": round(hmotnost, 3),
+        "Náročnosť": narocnost,
+        "J.cena materiálu (€/bm)": round(cena_bm, 4),
+        "Náklad materiál (€/ks)": round(cena_mat_ks, 4),
+        "Náklad kooperácia (€/ks)": round(cena_ks, 4),
+        "Vstupné náklady (€/ks)": round(vstupne_naklady_ks, 4),
+        "Čas (min)": cas_min,
+        "Jednotková cena (€/ks)": jednotkova_cena,
+        "Počet kusov": pocet_kusov,
+        "Cena položky spolu (€)": cena_polozky_spolu,
+    }
+    return riadok
+
+# Tlačidlo "Pridať do košíka" – aktivné len keď je potvrdený čas aj cena
+with cols[7]:
+    can_add = (
+        st.session_state.get("time_confirmed", False)
+        and st.session_state.get("price_confirmed", False)
+        and item.strip() != ""
+    )
+    if st.button("🧺 Pridať do košíka", disabled=not can_add):
+        # Ak sa zmenil ITEM oproti poslednému, berieme to ako nový item
+        if item != st.session_state.last_item_name:
+            st.session_state.last_item_name = item
+
+        riadok = vytvor_cp_riadok()
+        st.session_state.kosik.append(riadok)
+
+        # Po pridaní do košíka resetneme predikcie
+        st.session_state.predicted_time = 0.0
+        st.session_state.time_confirmed = False
+        st.session_state.predicted_price = 0.0
+        st.session_state.price_confirmed = False
+
+        st.success("Položka bola pridaná do košíka.")
+        st.rerun()
+
+st.divider()
+
+# Zobrazenie košíka
+if st.session_state.kosik:
+    st.subheader("Košík – položky v cenovej ponuke")
+
+    df_kosik = pd.DataFrame(st.session_state.kosik)
+    st.dataframe(df_kosik, use_container_width=True)
+
+    celkova_cena = df_kosik["Cena položky spolu (€)"].sum()
+    st.markdown(f"### Celková cena ponuky: **{round(celkova_cena, 2)} €**")
+
+# Poznámka pre zákazníka (NOTE v PDF)
+st.session_state.note_text = st.text_area("Poznámka pre zákazníka (NOTE v PDF)", value=st.session_state.note_text)
+
+# ============================
+# FUNKCIE NA GENEROVANIE PDF
+# ============================
+
+def generate_customer_pdf(kosik, cp_nazov, date, zakaznik, krajina, note_text, total_price):
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    y = height - 40
+
+    # Hlavička firmy (textová)
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(40, y, "MECASYS s.r.o.")
+    y -= 14
+    c.setFont("Helvetica", 10)
+    c.drawString(40, y, "Oravská Polhora 455")
+    y -= 14
+    c.drawString(40, y, "029 47 Oravská Polhora")
+    y -= 14
+    c.drawString(40, y, "Slovenská republika")
+    y -= 20
+
+    # Info o ponuke
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(40, y, f"Price offer: {cp_nazov}")
+    y -= 14
+    c.setFont("Helvetica", 10)
+    c.drawString(40, y, f"Date: {date.strftime('%d.%m.%Y')}")
+    y -= 14
+    c.drawString(40, y, f"Customer: {zakaznik}")
+    y -= 14
+    c.drawString(40, y, f"Country: {krajina}")
+    y -= 20
+
+    # Tabuľka položiek – jednoduchý výpis
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(40, y, "ITEM")
+    c.drawString(220, y, "Qty")
+    c.drawString(280, y, "Price/pcs")
+    c.drawString(370, y, "Total")
+    y -= 14
+    c.setFont("Helvetica", 10)
+
+    for r in kosik:
+        if y < 120:
+            c.showPage()
+            y = height - 40
+        c.drawString(40, y, str(r["ITEM"]))
+        c.drawString(220, y, str(r["Počet kusov"]))
+        c.drawString(280, y, f"{round(r['Jednotková cena (€/ks)'], 2)} €")
+        c.drawString(370, y, f"{round(r['Cena položky spolu (€)'], 2)} €")
+        y -= 14
+
+    y -= 10
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(40, y, f"Total price without VAT: {round(total_price, 2)} €")
+    y -= 20
+
+    # NOTE
+    if note_text:
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(40, y, "NOTE:")
+        y -= 14
+        c.setFont("Helvetica", 10)
+        for line in note_text.split("\n"):
+            if y < 80:
+                c.showPage()
+                y = height - 40
+            c.drawString(40, y, line)
+            y -= 14
+        y -= 10
+
+    # Obchodné podmienky
+    if y < 120:
+        c.showPage()
+        y = height - 40
+
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(40, y, "Terms and conditions:")
+    y -= 14
+    c.setFont("Helvetica", 9)
+    terms = [
+        "Price offer validity: 7 days",
+        "Payment terms: 30 days netto",
+        "Incoterms: EXW SK-029 47",
+        "Delivery lead time: 2–3 weeks from issued PO",
+        "Contact email for PO’s: objednavky@mecasys.sk",
+        "MECASYS reserves the right to adjust prices and payment terms in case of overdue liabilities",
+        "or changes exceeding 1.0%."
+    ]
+    for t in terms:
+        if y < 60:
+            c.showPage()
+            y = height - 40
+        c.drawString(40, y, t)
+        y -= 12
+
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer
+
+def generate_internal_pdf(kosik, cp_nazov, date, zakaznik, krajina, total_price):
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    y = height - 40
+
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(40, y, "MECASYS s.r.o. – INTERNAL COSTING")
+    y -= 16
+    c.setFont("Helvetica", 10)
+    c.drawString(40, y, f"CP: {cp_nazov}   Date: {date.strftime('%d.%m.%Y')}")
+    y -= 14
+    c.drawString(40, y, f"Customer: {zakaznik}   Country: {krajina}")
+    y -= 20
+
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(40, y, "ITEM")
+    c.drawString(180, y, "Qty")
+    c.drawString(220, y, "Mat/ks")
+    c.drawString(280, y, "Koop/ks")
+    c.drawString(340, y, "Vstup/ks")
+    c.drawString(410, y, "Time (min)")
+    c.drawString(470, y, "Price/ks")
+    y -= 12
+    c.setFont("Helvetica", 8)
+
+    for r in kosik:
+        if y < 80:
+            c.showPage()
+            y = height - 40
+            c.setFont("Helvetica-Bold", 9)
+            c.drawString(40, y, "ITEM")
+            c.drawString(180, y, "Qty")
+            c.drawString(220, y, "Mat/ks")
+            c.drawString(280, y, "Koop/ks")
+            c.drawString(340, y, "Vstup/ks")
+            c.drawString(410, y, "Time (min)")
+            c.drawString(470, y, "Price/ks")
+            y -= 12
+            c.setFont("Helvetica", 8)
+
+        c.drawString(40, y, str(r["ITEM"]))
+        c.drawString(180, y, str(r["Počet kusov"]))
+        c.drawString(220, y, f"{round(r['Náklad materiál (€/ks)'], 3)}")
+        c.drawString(280, y, f"{round(r['Náklad kooperácia (€/ks)'], 3)}")
+        c.drawString(340, y, f"{round(r['Vstupné náklady (€/ks)'], 3)}")
+        c.drawString(410, y, f"{round(r['Čas (min)'], 2)}")
+        c.drawString(470, y, f"{round(r['Jednotková cena (€/ks)'], 2)}")
+        y -= 12
+
+    y -= 16
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(40, y, f"Total offer price: {round(total_price, 2)} €")
+
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer
+
+# ============================
+# TLAČIDLO – ULOŽIŤ CP + GENEROVAŤ PDF
+# ============================
+
+if st.session_state.kosik:
+    if st.button("💾 Uložiť ponuku do Sheet + vygenerovať PDF"):
+        try:
+            # Uloženie do Google Sheet (Apps Script pre CP)
+            r = requests.post(CP_APP_SCRIPT_URL, json=st.session_state.kosik)
+            if r.status_code == 200:
+                st.success("Ponuka bola uložená do Google Sheet.")
+
+                df_kosik = pd.DataFrame(st.session_state.kosik)
+                total_price = df_kosik["Cena položky spolu (€)"].sum()
+
+                # PDF pre zákazníka
+                pdf_customer = generate_customer_pdf(
+                    st.session_state.kosik,
+                    cp_nazov,
+                    date,
+                    vybrany,
+                    krajina_input,
+                    st.session_state.note_text,
+                    total_price
+                )
+
+                # PDF interné
+                pdf_internal = generate_internal_pdf(
+                    st.session_state.kosik,
+                    cp_nazov,
+                    date,
+                    vybrany,
+                    krajina_input,
+                    total_price
+                )
+
+                st.download_button(
+                    label="⬇️ Stiahnuť PDF – zákazník",
+                    data=pdf_customer,
+                    file_name=f"{cp_nazov}_customer.pdf",
+                    mime="application/pdf"
+                )
+
+                st.download_button(
+                    label="⬇️ Stiahnuť PDF – interné",
+                    data=pdf_internal,
+                    file_name=f"{cp_nazov}_internal.pdf",
+                    mime="application/pdf"
+                )
+
+            else:
+                st.error("Chyba pri ukladaní ponuky do Google Sheet.")
+        except Exception as e:
+            st.error(f"Chyba pri ukladaní alebo generovaní PDF: {e}")
