@@ -495,13 +495,7 @@ with col7:
 
 st.divider()
 
-# ============================================
-# ========================================================
-# 5. RIADOK – AI PREDIKCIE (STV + KR – FINÁLNA VERZIA)
-# ========================================================
-
-# ========================================================
-# 5. RIADOK – AI PREDIKCIE (KOMPAKTNÁ VERZIA)
+# 5. RIADOK – AI PREDIKCIE (FINALIZOVANÁ LOGIKA)
 # ========================================================
 
 # ID MODELOV
@@ -510,15 +504,15 @@ ID_MODELS = {
     "STV": {"CAS": "18nIcgJdvfHHN2ToLufUi-PTQwPwYopfW", "CENA": "1IbYUvNlcKwhm7fx-WbLQ5_jtP_hDsVud"}
 }
 
-# VALIDÁCIA
-KR_ALLOWED_SUBCATS = ['ALLOYED', 'AUST', 'TOOL', 'UNALL', 'ALU', 'POM', 'PE', 'OTHER', 'HSS', 'LOWAL', 'PA', 'BRONZE', 'MART', 'BRASS', 'PEEK', 'FERR', 'PVC', 'PET']
-KR_ALLOWED_COUNTRIES = ['SK', 'FR', 'PT', 'DE', 'SUI', 'EN', 'CZ', 'LAT', 'AT', 'NL', 'SWE', 'HU', 'RO']
+# VALIDÁCIA (Univerzálna pre KR aj STV podľa dohody)
+ALLOWED_SUBCATS = ['ALLOYED', 'AUST', 'TOOL', 'UNALL', 'ALU', 'POM', 'PE', 'OTHER', 'HSS', 'LOWAL', 'PA', 'BRONZE', 'MART', 'BRASS', 'PEEK', 'FERR', 'PVC', 'PET']
+ALLOWED_COUNTRIES = ['SK', 'FR', 'PT', 'DE', 'SUI', 'EN', 'CZ', 'LAT', 'AT', 'NL', 'SWE', 'HU', 'RO']
 
-def get_valid_kr_subcat(subcat):
-    return subcat if subcat in KR_ALLOWED_SUBCATS else 'OTHER'
+def get_valid_subcat(subcat):
+    return subcat if subcat in ALLOWED_SUBCATS else 'OTHER'
 
-def get_valid_kr_country(country):
-    return country if country in KR_ALLOWED_COUNTRIES else 'OTHER'
+def get_valid_country(country):
+    return country if country in ALLOWED_COUNTRIES else 'OTHER'
 
 # Inicializácia Session State
 for key in ["time_confirmed", "predicted_time", "predicted_price"]:
@@ -533,15 +527,17 @@ with cols[0]:
             model_id = ID_MODELS[tvar]["CAS"]
             m_data = load_model_from_drive(model_id, f"model_{tvar.lower()}_cas.pkl")
             model = m_data["model"]
+            
             data = pd.DataFrame({
-                "hmotnost_kg": [hmotnost], "plocha_m2": [plocha/100],
+                "hmotnost_kg": [hmotnost], 
+                "plocha_m2": [plocha/100],
                 "geom_koef": [l_mm/d_mm if d_mm>0 else 0] if tvar == "KR" else [((s+v)/dp) if dp>0 else 0],
                 "log_pocet_kusov": [np.log1p(pocet_kusov)],
-                "subcategory_clean": [get_valid_kr_subcat(subcategory) if tvar == "KR" else subcategory]
+                "subcategory_clean": [get_valid_subcat(subcategory)]
             })
             st.session_state.predicted_time = round(np.expm1(model.predict(data))[0], 2)
             st.session_state.time_confirmed = False
-        except Exception as e: st.error(f"Chyba: {e}")
+        except Exception as e: st.error(f"Chyba času: {e}")
 
 with cols[1]:
     vyr_cas_input = st.number_input("Čas (min)", value=st.session_state.predicted_time, step=0.1)
@@ -556,21 +552,27 @@ with cols[4]:
             model_id = ID_MODELS[tvar]["CENA"]
             m_data = load_model_from_drive(model_id, f"model_{tvar.lower()}_cena.pkl")
             model = m_data["model"]
+            
+            # Dáta pre CENA model (obsahujú krajinu pre oba typy STV aj KR)
             data_cena = pd.DataFrame({
-                "hmotnost_kg": [hmotnost], "plocha_m2": [plocha/100],
+                "hmotnost_kg": [hmotnost], 
+                "plocha_m2": [plocha/100],
                 "geom_koef": [l_mm/d_mm if d_mm > 0 else 0] if tvar == "KR" else [((s+v)/dp) if dp > 0 else 0],
                 "log_pocet_kusov": [np.log1p(pocet_kusov)],
                 "cena_material_predpoklad": [vstupne_naklady_ks],
                 "log_cas": [np.log1p(st.session_state.predicted_time)],
-                "subcategory_clean": [get_valid_kr_subcat(subcategory)],
-                "zakaznik_krajina": [get_valid_kr_country(krajina_input)]
+                "subcategory_clean": [get_valid_subcat(subcategory)],
+                "zakaznik_krajina": [get_valid_country(krajina_input)]
             })
             st.session_state.predicted_price = round(np.expm1(model.predict(data_cena))[0], 2)
-        except Exception as e: st.error(f"Chyba: {e}")
+        except Exception as e: st.error(f"Chyba ceny: {e}")
 
 with cols[5]:
     vyr_cena_input = st.number_input("Cena (€)", value=st.session_state.predicted_price, step=0.1)
 with cols[6]:
     if st.button("💾 Uložiť"):
+        st.success("Uložené")
+
+
         st.success("Uložené")
 
