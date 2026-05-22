@@ -676,21 +676,20 @@ if st.session_state.get("predicted_price", 0) > 0:
             st.rerun()
 
 # ========================================================
+# ========================================================
 # KOŠÍK + PDF + ULOŽENIE DO SHEETU
 # ========================================================
 
-# Funkcia na vytvorenie riadku pre CP sheet
 def vytvor_cp_riadok():
     cas_min = round(st.session_state.predicted_time * 60, 2)
     jednotkova_cena = st.session_state.predicted_price
     cena_polozky_spolu = round(jednotkova_cena * pocet_kusov, 2)
 
-    riadok = {
+    return {
         "Dátum CP": date.strftime("%d.%m.%Y"),
         "Číslo CP": cp_nazov,
         "Zákazník": vybrany,
         "Krajina": krajina_input,
-        "Lojalita": "",
         "ITEM": item,
         "Tvar": tvar,
         "Materiál": material,
@@ -710,247 +709,6 @@ def vytvor_cp_riadok():
         "Počet kusov": pocet_kusov,
         "Cena položky spolu (€)": cena_polozky_spolu,
     }
-    return riadok
-
-# Tlačidlo "Pridať do košíka" – aktivné len keď je potvrdený čas aj cena
-with cols[7]:
-    can_add = (
-        st.session_state.get("time_confirmed", False)
-        and st.session_state.get("price_confirmed", False)
-        and item.strip() != ""
-    )
-    if st.button("🧺 Pridať do košíka", disabled=not can_add):
-        # Ak sa zmenil ITEM oproti poslednému, berieme to ako nový item
-        if item != st.session_state.last_item_name:
-            st.session_state.last_item_name = item
-
-        riadok = vytvor_cp_riadok()
-        st.session_state.kosik.append(riadok)
-
-        # Po pridaní do košíka resetneme predikcie
-        st.session_state.predicted_time = 0.0
-        st.session_state.time_confirmed = False
-        st.session_state.predicted_price = 0.0
-        st.session_state.price_confirmed = False
-
-        st.success("Položka bola pridaná do košíka.")
-        st.rerun()
-
-st.divider()
-
-# Zobrazenie košíka
-if st.session_state.kosik:
-    st.subheader("Košík – položky v cenovej ponuke")
-
-    df_kosik = pd.DataFrame(st.session_state.kosik)
-    st.dataframe(df_kosik, use_container_width=True)
-
-    celkova_cena = df_kosik["Cena položky spolu (€)"].sum()
-    st.markdown(f"### Celková cena ponuky: **{round(celkova_cena, 2)} €**")
-
-# Poznámka pre zákazníka (NOTE v PDF)
-st.session_state.note_text = st.text_area("Poznámka pre zákazníka (NOTE v PDF)", value=st.session_state.note_text)
-
-# ============================
-# FUNKCIE NA GENEROVANIE PDF
-# ============================
-
-def generate_customer_pdf(kosik, cp_nazov, date, zakaznik, krajina, note_text, total_price):
-    buffer = io.BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
-
-    y = height - 40
-
-    # Hlavička firmy (textová)
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(40, y, "MECASYS s.r.o.")
-    y -= 14
-    c.setFont("Helvetica", 10)
-    c.drawString(40, y, "Oravská Polhora 455")
-    y -= 14
-    c.drawString(40, y, "029 47 Oravská Polhora")
-    y -= 14
-    c.drawString(40, y, "Slovenská republika")
-    y -= 20
-
-    # Info o ponuke
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(40, y, f"Price offer: {cp_nazov}")
-    y -= 14
-    c.setFont("Helvetica", 10)
-    c.drawString(40, y, f"Date: {date.strftime('%d.%m.%Y')}")
-    y -= 14
-    c.drawString(40, y, f"Customer: {zakaznik}")
-    y -= 14
-    c.drawString(40, y, f"Country: {krajina}")
-    y -= 20
-
-    # Tabuľka položiek – jednoduchý výpis
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(40, y, "ITEM")
-    c.drawString(220, y, "Qty")
-    c.drawString(280, y, "Price/pcs")
-    c.drawString(370, y, "Total")
-    y -= 14
-    c.setFont("Helvetica", 10)
-
-    for r in kosik:
-        if y < 120:
-            c.showPage()
-            y = height - 40
-        c.drawString(40, y, str(r["ITEM"]))
-        c.drawString(220, y, str(r["Počet kusov"]))
-        c.drawString(280, y, f"{round(r['Jednotková cena (€/ks)'], 2)} €")
-        c.drawString(370, y, f"{round(r['Cena položky spolu (€)'], 2)} €")
-        y -= 14
-
-    y -= 10
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(40, y, f"Total price without VAT: {round(total_price, 2)} €")
-    y -= 20
-
-    # NOTE
-    if note_text:
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(40, y, "NOTE:")
-        y -= 14
-        c.setFont("Helvetica", 10)
-        for line in note_text.split("\n"):
-            if y < 80:
-                c.showPage()
-                y = height - 40
-            c.drawString(40, y, line)
-            y -= 14
-        y -= 10
-
-    # Obchodné podmienky
-    if y < 120:
-        c.showPage()
-        y = height - 40
-
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(40, y, "Terms and conditions:")
-    y -= 14
-    c.setFont("Helvetica", 9)
-    terms = [
-        "Price offer validity: 7 days",
-        "Payment terms: 30 days netto",
-        "Incoterms: EXW SK-029 47",
-        "Delivery lead time: 2–3 weeks from issued PO",
-        "Contact email for PO’s: objednavky@mecasys.sk",
-        "MECASYS reserves the right to adjust prices and payment terms in case of overdue liabilities",
-        "or changes exceeding 1.0%."
-    ]
-    for t in terms:
-        if y < 60:
-            c.showPage()
-            y = height - 40
-        c.drawString(40, y, t)
-        y -= 12
-
-    c.showPage()
-    c.save()
-    buffer.seek(0)
-    return buffer
-
-def generate_internal_pdf(kosik, cp_nazov, date, zakaznik, krajina, total_price):
-    buffer = io.BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
-
-    y = height - 40
-
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(40, y, "MECASYS s.r.o. – INTERNAL COSTING")
-    y -= 16
-    c.setFont("Helvetica", 10)
-    c.drawString(40, y, f"CP: {cp_nazov}   Date: {date.strftime('%d.%m.%Y')}")
-    y -= 14
-    c.drawString(40, y, f"Customer: {zakaznik}   Country: {krajina}")
-    y -= 20
-
-    c.setFont("Helvetica-Bold", 9)
-    c.drawString(40, y, "ITEM")
-    c.drawString(180, y, "Qty")
-    c.drawString(220, y, "Mat/ks")
-    c.drawString(280, y, "Koop/ks")
-    c.drawString(340, y, "Vstup/ks")
-    c.drawString(410, y, "Time (min)")
-    c.drawString(470, y, "Price/ks")
-    y -= 12
-    c.setFont("Helvetica", 8)
-
-    for r in kosik:
-        if y < 80:
-            c.showPage()
-            y = height - 40
-            c.setFont("Helvetica-Bold", 9)
-            c.drawString(40, y, "ITEM")
-            c.drawString(180, y, "Qty")
-            c.drawString(220, y, "Mat/ks")
-            c.drawString(280, y, "Koop/ks")
-            c.drawString(340, y, "Vstup/ks")
-            c.drawString(410, y, "Time (min)")
-            c.drawString(470, y, "Price/ks")
-            y -= 12
-            c.setFont("Helvetica", 8)
-
-        c.drawString(40, y, str(r["ITEM"]))
-        c.drawString(180, y, str(r["Počet kusov"]))
-        c.drawString(220, y, f"{round(r['Náklad materiál (€/ks)'], 3)}")
-        c.drawString(280, y, f"{round(r['Náklad kooperácia (€/ks)'], 3)}")
-        c.drawString(340, y, f"{round(r['Vstupné náklady (€/ks)'], 3)}")
-        c.drawString(410, y, f"{round(r['Čas (min)'], 2)}")
-        c.drawString(470, y, f"{round(r['Jednotková cena (€/ks)'], 2)}")
-        y -= 12
-
-    y -= 16
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(40, y, f"Total offer price: {round(total_price, 2)} €")
-
-    c.showPage()
-    c.save()
-    buffer.seek(0)
-    return buffer
-
-# ============================
-# ========================================================
-# KOŠÍK + PDF + ULOŽENIE DO SHEETU
-# ========================================================
-
-# Funkcia na vytvorenie riadku pre CP sheet (KOŠÍK NECHÁVAM TAKÝ, AKÝ JE)
-def vytvor_cp_riadok():
-    cas_min = round(st.session_state.predicted_time * 60, 2)
-    jednotkova_cena = st.session_state.predicted_price
-    cena_polozky_spolu = round(jednotkova_cena * pocet_kusov, 2)
-
-    riadok = {
-        "Dátum CP": date.strftime("%d.%m.%Y"),
-        "Číslo CP": cp_nazov,
-        "Zákazník": vybrany,
-        "Krajina": krajina_input,
-        "Lojalita": "",
-        "ITEM": item,
-        "Tvar": tvar,
-        "Materiál": material,
-        "Akosť": ", ".join(akost_vyber) if akost_vyber else "",
-        "Rozmer D / DP": dp if tvar == "STV" else d_mm,
-        "Rozmer L / S": s if tvar == "STV" else l_mm,
-        "Rozmer V": v if tvar == "STV" else 0.0,
-        "Hustota": hustota,
-        "Hmotnosť kusu (kg)": round(hmotnost, 3),
-        "Náročnosť": narocnost,
-        "J.cena materiálu (€/bm)": round(cena_bm, 4),
-        "Náklad materiál (€/ks)": round(cena_mat_ks, 4),
-        "Náklad kooperácia (€/ks)": round(cena_ks, 4),
-        "Vstupné náklady (€/ks)": round(vstupne_naklady_ks, 4),
-        "Čas (min)": cas_min,
-        "Jednotková cena (€/ks)": jednotkova_cena,
-        "Počet kusov": pocet_kusov,
-        "Cena položky spolu (€)": cena_polozky_spolu,
-    }
-    return riadok
 
 
 # Tlačidlo "Pridať do košíka"
@@ -961,18 +719,11 @@ with cols[7]:
         and item.strip() != ""
     )
     if st.button("🧺 Pridať do košíka", disabled=not can_add):
-
-        if item != st.session_state.last_item_name:
-            st.session_state.last_item_name = item
-
-        riadok = vytvor_cp_riadok()
-        st.session_state.kosik.append(riadok)
-
+        st.session_state.kosik.append(vytvor_cp_riadok())
         st.session_state.predicted_time = 0.0
         st.session_state.time_confirmed = False
         st.session_state.predicted_price = 0.0
         st.session_state.price_confirmed = False
-
         st.success("Položka bola pridaná do košíka.")
         st.rerun()
 
@@ -981,10 +732,8 @@ st.divider()
 # Zobrazenie košíka
 if st.session_state.kosik:
     st.subheader("Košík – položky v cenovej ponuke")
-
     df_kosik = pd.DataFrame(st.session_state.kosik)
     st.dataframe(df_kosik, use_container_width=True)
-
     celkova_cena = df_kosik["Cena položky spolu (€)"].sum()
     st.markdown(f"### Celková cena ponuky: **{round(celkova_cena, 2)} €**")
 
@@ -996,12 +745,10 @@ st.session_state.note_text = st.text_area("Poznámka pre zákazníka (NOTE v PDF
 # PDF FUNKCIE
 # ========================================================
 
-# PDF pre zákazníka (OSTÁVA PRESNE AKO BOLO)
 def generate_customer_pdf(kosik, cp_nazov, date, zakaznik, krajina, note_text, total_price):
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
-
     y = height - 40
 
     c.setFont("Helvetica-Bold", 11)
@@ -1038,7 +785,7 @@ def generate_customer_pdf(kosik, cp_nazov, date, zakaznik, krajina, note_text, t
         if y < 120:
             c.showPage()
             y = height - 40
-        c.drawString(40, y, str(r["ITEM"]))
+        c.drawString(40, y, r["ITEM"])
         c.drawString(220, y, str(r["Počet kusov"]))
         c.drawString(280, y, f"{round(r['Jednotková cena (€/ks)'], 2)} €")
         c.drawString(370, y, f"{round(r['Cena položky spolu (€)'], 2)} €")
@@ -1060,7 +807,6 @@ def generate_customer_pdf(kosik, cp_nazov, date, zakaznik, krajina, note_text, t
                 y = height - 40
             c.drawString(40, y, line)
             y -= 14
-        y -= 10
 
     c.showPage()
     c.save()
@@ -1069,7 +815,7 @@ def generate_customer_pdf(kosik, cp_nazov, date, zakaznik, krajina, note_text, t
 
 
 # ========================================================
-# NOVÉ INTERNÉ PDF (LANDSCAPE + VŠETKY ÚDAJE)
+# INTERNÉ PDF – TABUĽKA (VARIANTA B)
 # ========================================================
 
 from reportlab.lib.pagesizes import landscape
@@ -1078,7 +824,6 @@ def generate_internal_pdf(kosik, cp_nazov, date, zakaznik, krajina, total_price)
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=landscape(A4))
     width, height = landscape(A4)
-
     y = height - 40
 
     c.setFont("Helvetica-Bold", 14)
@@ -1086,59 +831,60 @@ def generate_internal_pdf(kosik, cp_nazov, date, zakaznik, krajina, total_price)
     y -= 20
 
     c.setFont("Helvetica", 11)
-    c.drawString(40, y, f"CP: {cp_nazov}")
+    c.drawString(40, y, f"CP: {cp_nazov}   Date: {date.strftime('%d.%m.%Y')}")
     y -= 14
-    c.drawString(40, y, f"Date: {date.strftime('%d.%m.%Y')}")
-    y -= 14
-    c.drawString(40, y, f"Customer: {zakaznik}  |  Country: {krajina}")
-    y -= 30
+    c.drawString(40, y, f"Customer: {zakaznik}   Country: {krajina}")
+    y -= 20
+
+    # Hlavička tabuľky
+    c.setFont("Helvetica-Bold", 8)
+    headers = [
+        "ITEM", "Qty", "Tvar", "D/DP", "L/S", "V",
+        "Mat €/bm", "Mat/ks", "Koop/ks", "Vstup/ks",
+        "Čas (min)", "Cena/ks", "Cena spolu"
+    ]
+    x_positions = [40, 120, 160, 200, 240, 280, 320, 380, 440, 500, 560, 620, 680]
+
+    for x, h in zip(x_positions, headers):
+        c.drawString(x, y, h)
+    y -= 12
+
+    c.setFont("Helvetica", 8)
 
     for r in kosik:
-
-        if y < 120:
+        if y < 60:
             c.showPage()
             y = height - 40
+            c.setFont("Helvetica-Bold", 8)
+            for x, h in zip(x_positions, headers):
+                c.drawString(x, y, h)
+            y -= 12
+            c.setFont("Helvetica", 8)
 
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(40, y, f"ITEM: {r['ITEM']}")
-        y -= 16
+        row = [
+            r["ITEM"],
+            str(r["Počet kusov"]),
+            r["Tvar"],
+            str(r["Rozmer D / DP"]),
+            str(r["Rozmer L / S"]),
+            str(r["Rozmer V"]),
+            str(r["J.cena materiálu (€/bm)"]),
+            str(r["Náklad materiál (€/ks)"]),
+            str(r["Náklad kooperácia (€/ks)"]),
+            str(r["Vstupné náklady (€/ks)"]),
+            str(r["Čas (min)"]),
+            str(r["Jednotková cena (€/ks)"]),
+            str(r["Cena položky spolu (€)"]),
+        ]
 
-        c.setFont("Helvetica", 10)
-        c.drawString(40, y, f"Quantity: {r['Počet kusov']}")
-        y -= 14
+        for x, cell in zip(x_positions, row):
+            c.drawString(x, y, cell)
 
-        c.drawString(40, y, f"Shape: {r['Tvar']}")
-        y -= 14
+        y -= 12
 
-        if r["Tvar"] == "KR":
-            c.drawString(40, y, f"Dimensions: D={r['Rozmer D / DP']} mm, L={r['Rozmer L / S']} mm")
-        else:
-            c.drawString(40, y, f"Dimensions: D/P={r['Rozmer D / DP']} mm, S={r['Rozmer L / S']} mm, V={r['Rozmer V']} mm")
-        y -= 14
-
-        c.drawString(40, y, f"Material: {r['Materiál']} | Grade: {r['Akosť']}")
-        y -= 14
-
-        c.drawString(40, y, f"Density: {r['Hustota']} kg/m³ | Weight/pc: {r['Hmotnosť kusu (kg)']} kg")
-        y -= 14
-
-        c.drawString(40, y, f"Material price: {r['J.cena materiálu (€/bm)']} €/bm  |  Mat/pc: {r['Náklad materiál (€/ks)']} €")
-        y -= 14
-
-        c.drawString(40, y, f"Cooperation/pc: {r['Náklad kooperácia (€/ks)']} €")
-        y -= 14
-
-        c.drawString(40, y, f"Input costs/pc: {r['Vstupné náklady (€/ks)']} €")
-        y -= 14
-
-        c.drawString(40, y, f"Approved price/pc: {r['Jednotková cena (€/ks)']} €")
-        y -= 14
-
-        c.drawString(40, y, f"Total item price: {r['Cena položky spolu (€)']} €")
-        y -= 24
-
-        c.line(40, y, width - 40, y)
-        y -= 20
+    y -= 16
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(40, y, f"Total offer price: {round(total_price, 2)} €")
 
     c.showPage()
     c.save()
@@ -1164,22 +910,13 @@ if st.session_state.kosik:
         total_price = df_kosik["Cena položky spolu (€)"].sum()
 
         pdf_customer = generate_customer_pdf(
-            st.session_state.kosik,
-            cp_nazov,
-            date,
-            vybrany,
-            krajina_input,
-            st.session_state.note_text,
-            total_price
+            st.session_state.kosik, cp_nazov, date, vybrany,
+            krajina_input, st.session_state.note_text, total_price
         )
 
         pdf_internal = generate_internal_pdf(
-            st.session_state.kosik,
-            cp_nazov,
-            date,
-            vybrany,
-            krajina_input,
-            total_price
+            st.session_state.kosik, cp_nazov, date, vybrany,
+            krajina_input, total_price
         )
 
         zip_buffer = io.BytesIO()
