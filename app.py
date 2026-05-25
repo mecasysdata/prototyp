@@ -125,6 +125,16 @@ with col2:
     pocet_kusov = st.number_input("Počet kusov", min_value=1, step=1)
 with col3:
     narocnost = st.selectbox("Náročnosť", [1, 2, 3, 4, 5])
+# --- FIX: Reset predikcie pri zmene náročnosti ---
+if "last_narocnost" not in st.session_state:
+    st.session_state.last_narocnost = narocnost
+
+if st.session_state.last_narocnost != narocnost:
+    st.session_state.last_narocnost = narocnost
+    st.session_state.predicted_time = 0.0
+    st.session_state.time_confirmed = False
+
+
 with col4:
     tvar = st.selectbox("Tvar položky", ["STV", "KR"])
 
