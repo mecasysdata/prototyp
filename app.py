@@ -8,7 +8,8 @@ import os
 import joblib
 import numpy as np
 import io
-from reportlab.lib.pagesizes import A4
+import zipfile
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.pdfgen import canvas
 
 # --- FUNKCIA NA NAČÍTANIE MODELOV ---
@@ -25,8 +26,6 @@ st.set_page_config(layout="wide", page_title="MEC Calculation")
 # --- CONSTANTS ---
 SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSuHQWbpryWNerWr8aKKheHbzTPhXI6lS7YH1sL5zwFIIzLfpTZz47acY_ua2e_fVqEcfxMBe5wnjue/pub?gid=0&single=true&output=csv"
 APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNR33wxSNXJFo9-o2otM-mdKQE22s3i3y5n08dY7eogGhhKDTasiPn3zaOoSihppTq/exec"
-
-# Apps Script pre ukladanie CP (ten, čo si posielala pre Hárok1)
 CP_APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwx7sAeUheQf1dm2r6k7jTslD9ufhq2yk1OWZXWjxVkeZOttVI949GIiPGx8l1B3cIP/exec"
 
 # --- INIT SESSION STATE ---
@@ -44,6 +43,8 @@ if "last_item_name" not in st.session_state:
     st.session_state.last_item_name = ""
 if "note_text" not in st.session_state:
     st.session_state.note_text = ""
+if "last_inputs_snapshot" not in st.session_state:
+    st.session_state.last_inputs_snapshot = {}
 
 # --- LOGO A NÁZOV ---
 col_logo, col_title = st.columns([1, 5])
@@ -125,16 +126,6 @@ with col2:
     pocet_kusov = st.number_input("Počet kusov", min_value=1, step=1)
 with col3:
     narocnost = st.selectbox("Náročnosť", [1, 2, 3, 4, 5])
-# --- FIX: Reset predikcie pri zmene náročnosti ---
-if "last_narocnost" not in st.session_state:
-    st.session_state.last_narocnost = narocnost
-
-if st.session_state.last_narocnost != narocnost:
-    st.session_state.last_narocnost = narocnost
-    st.session_state.predicted_time = 0.0
-    st.session_state.time_confirmed = False
-
-
 with col4:
     tvar = st.selectbox("Tvar položky", ["STV", "KR"])
 
@@ -211,7 +202,6 @@ dlzka_mm = l_mm if tvar == "KR" else dp
 # --- VÝPOČET CENY ---
 cena_mat_ks = round(cena_bm * (dlzka_mm / 1000), 4)
 
-# --- UI (bez session_state konfliktu) ---
 with col4:
     st.write("Cena €/bm")
     st.write(round(cena_bm, 4))
@@ -223,7 +213,6 @@ with col5:
 # ============================
 # BOX – Pridať nový polotovar
 # ============================
-
 material_list = sorted(df_pol["material"].dropna().unique().tolist())
 
 if polotovar_key == "new":
@@ -240,29 +229,22 @@ if polotovar_key == "new":
                 index=material_list.index(material),
                 key="novy_material"
             )
-
         with box2:
             nova_akost = st.text_input(
                 "Akosť (nová)",
                 value=akost_vyber[0] if akost_vyber else "",
                 key="nova_akost"
             )
-
         with box3:
             novy_nazov = st.text_input("Názov (nový)", key="novy_nazov")
-
         with box4:
             novy_tvar = st.selectbox("Tvar (nový)", ["STV", "KR", "6HR", "TR"], key="novy_tvar")
-
         with box5:
             r1 = st.text_input("Rozmer 1", key="r1_new")
-
         with box6:
             r2 = st.text_input("Rozmer 2", key="r2_new")
-
         with box7:
             r3 = st.text_input("Rozmer 3", key="r3_new")
-
         with box8:
             cena = st.number_input("Cena €/bm", min_value=0.0, step=0.1, key="cena_new")
 
@@ -280,30 +262,23 @@ if polotovar_key == "new":
                     "Rozmer2": r2,
                     "Rozmer3": r3
                 }
-
                 r = requests.post(
                     "https://script.google.com/macros/s/AKfycbzyZxjTplhk010oq7ozvovAGx5lRx72PjqUvoJUrNazx_jRfq7lqfQgbeHYG9O-NCcX/exec",
                     json=payload
                 )
-
                 if r.status_code == 200:
-                    new_polotovar_label = f"[{nova_akost}] {novy_nazov} | {r1}x{r2}x{r3} | Cena: {cena} €/bm"
-
                     st.session_state["force_akost"] = nova_akost
-                    st.session_state["force_polotovar"] = new_polotovar_label
-
                     st.success("Polotovar bol uložený.")
                     st.cache_data.clear()
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.error("Nepodarilo sa uložiť polotovar.")
             else:
                 st.error("Vyplň všetky polia.")
 
 # ============================
-# LOAD KOOPERÁCIE (HÁROK)
+# LOAD KOOPERÁCIE
 # ============================
-
 KOOP_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRXlw1ybqaKDNFzTXEBQXtyZDSrLeauZ6l_1jZGuq5_KU8RPjrz4M_B5RGIAF9XTca8mSCSflH6pZE8/pub?gid=1711993868&single=true&output=csv"
 
 @st.cache_data
@@ -315,7 +290,7 @@ def load_kooperacie():
 df_kooperacie = load_kooperacie()
 
 # ============================
-# SUBCATEGORY + HUSTOTY – FUNKCIE A DÁTA PRE RIADOK 4
+# SUBCATEGORY + HUSTOTY
 # ============================
 def urci_subcategory(akost, material, nazov_materialu):
     ak = str(akost).replace(" ", "").replace(",", ".")
@@ -342,37 +317,26 @@ def urci_subcategory(akost, material, nazov_materialu):
 
     if ak.startswith(tuple(f"1.{i:02d}" for i in range(0, 15))):
         return "UNALL"
-
     if ak.startswith(tuple(f"1.{i:02d}" for i in range(15, 65))):
         return "LOWAL"
-
     if ak.startswith(tuple(f"1.{i:02d}" for i in range(65, 90))):
         return "ALLOYED"
-
     if ak.startswith(tuple(f"1.{i:02d}" for i in range(20, 33))):
         return "TOOL"
-
     if ak.startswith(tuple(f"1.{i:02d}" for i in range(33, 39))):
         return "HSS"
-
     if ak.startswith("1.4462"):
         return "DUPX"
-
     if ak.startswith("1.44"):
         return "DUPX"
-
     if ak.startswith("1.43") or ak.startswith("1.45"):
         return "AUST"
-
     if ak.startswith("1.41"):
         return "MART"
-
     if ak.startswith("1.40"):
         return "FERR"
-
     if ak.startswith(("1.46", "1.47", "1.48", "1.49")):
         return "STAIN-SPEC"
-
     if ak.startswith(("2.00", "2.01")):
         return "CU"
     if ak.startswith(("2.02", "2.03", "2.04", "2.05")):
@@ -387,22 +351,11 @@ def urci_subcategory(akost, material, nazov_materialu):
         return "NI-SPEC"
 
     plast_map = {
-        "POM": "POM",
-        "PEEK": "PEEK",
-        "PET": "PET",
-        "PC": "PC",
-        "PVC": "PVC",
-        "PTFE": "PTFE",
-        "PUR": "PUR",
-        "PMMA": "PMMA",
-        "RUBBER": "RUBBER",
-        "PA": "PA",
-        "PP": "PP",
-        "PE": "PE",
+        "POM": "POM", "PEEK": "PEEK", "PET": "PET", "PC": "PC",
+        "PVC": "PVC", "PTFE": "PTFE", "PUR": "PUR", "PMMA": "PMMA",
+        "RUBBER": "RUBBER", "PA": "PA", "PP": "PP", "PE": "PE",
     }
-
     naz = str(nazov_materialu).upper()
-
     for key in plast_map:
         if naz == key or naz.startswith(key):
             return plast_map[key]
@@ -410,43 +363,19 @@ def urci_subcategory(akost, material, nazov_materialu):
     return "UNKNOWN"
 
 hustoty = {
-    "UNALL": 7900,
-    "LOWAL": 7900,
-    "ALLOYED": 7900,
-    "TOOL": 7900,
-    "HSS": 7900,
-    "AUST": 8000,
-    "MART": 8000,
-    "DUPX": 8000,
-    "FERR": 8000,
-    "STAIN-SPEC": 8000,
-    "CU": 9000,
-    "BRASS": 9000,
-    "BRONZE": 9000,
-    "ALU": 2900,
-    "TI": 4500,
-    "NI-SPEC": 8500,
-    "POM": 1500,
-    "PE": 1000,
-    "PA": 1200,
-    "PP": 1000,
-    "PEEK": 1400,
-    "PET": 1700,
-    "PC": 1500,
-    "PVC": 1700,
-    "PTFE": 3000,
-    "PUR": 2000,
-    "PMMA": 1600,
-    "RUBBER": 7900,
-    "CAST-GG": 7150,
-    "CAST-GGG": 7250,
+    "UNALL": 7900, "LOWAL": 7900, "ALLOYED": 7900, "TOOL": 7900,
+    "HSS": 7900, "AUST": 8000, "MART": 8000, "DUPX": 8000,
+    "FERR": 8000, "STAIN-SPEC": 8000, "CU": 9000, "BRASS": 9000,
+    "BRONZE": 9000, "ALU": 2900, "TI": 4500, "NI-SPEC": 8500,
+    "POM": 1500, "PE": 1000, "PA": 1200, "PP": 1000, "PEEK": 1400,
+    "PET": 1700, "PC": 1500, "PVC": 1700, "PTFE": 3000, "PUR": 2000,
+    "PMMA": 1600, "RUBBER": 7900, "CAST-GG": 7150, "CAST-GGG": 7250,
     "CAST-TEMP": 7400,
 }
 
 # ============================
-# RIADOK 4 – všetko vedľa seba
+# RIADOK 4 – Kooperácie + výpočty
 # ============================
-
 col1, col2, col3, col4, col5, col6, col7 = st.columns([1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.4])
 
 with col1:
@@ -493,7 +422,6 @@ if kooperacia:
         vyber_koop = st.selectbox("Typ", druhy)
 
     riadok = df_koop[df_koop["druh"] == vyber_koop].iloc[0]
-
     jednotka = riadok["jednotka"]
     tarifa = float(riadok["tarifa"])
     min_zakazka = float(riadok["minimalna zakazka"])
@@ -506,7 +434,6 @@ if kooperacia:
         cena_ks = 0.0
 
     cena_spolu = cena_ks * pocet_kusov
-
     if cena_spolu < min_zakazka:
         cena_ks = min_zakazka / pocet_kusov
 else:
@@ -520,17 +447,43 @@ with col7:
 
 st.divider()
 
+# ============================
+# SNAPSHOT – RESET PREDIKCIÍ PRI ZMENE VSTUPOV
+# ============================
+current_snapshot = {
+    "item": item,
+    "pocet_kusov": pocet_kusov,
+    "narocnost": narocnost,
+    "tvar": tvar,
+    "dp": dp,
+    "s": s,
+    "v": v,
+    "d_mm": d_mm,
+    "l_mm": l_mm,
+    "material": material,
+    "akost": tuple(akost_vyber),
+    "polotovar_key": polotovar_key,
+    "kooperacia": kooperacia,
+    "hustota": hustota,
+}
+
+if st.session_state.last_inputs_snapshot and current_snapshot != st.session_state.last_inputs_snapshot:
+    st.session_state.predicted_time = 0.0
+    st.session_state.time_confirmed = False
+    st.session_state.predicted_price = 0.0
+    st.session_state.price_confirmed = False
+
+st.session_state.last_inputs_snapshot = current_snapshot
+
 # ========================================================
-# 5. RIADOK – AI PREDIKCIE (FINALIZOVANÁ LOGIKA)
+# 5. RIADOK – AI PREDIKCIE
 # ========================================================
 
-# ID MODELOV
 ID_MODELS = {
     "KR": {"CAS": "1Xtqsn4B-go8czEXO99oGsDGgpt8_PUmU", "CENA": "1KwQyinwdW82CM0EN_7UshnDdHtv65X3p"},
     "STV": {"CAS": "18nIcgJdvfHHN2ToLufUi-PTQwPwYopfW", "CENA": "1IbYUvNlcKwhm7fx-WbLQ5_jtP_hDsVud"}
 }
 
-# VALID MAP PODĽA TVOJICH ZOZNAMOV
 VALID_MAP = {
     "STV": {
         "CAS": {
@@ -686,7 +639,6 @@ if st.session_state.get("predicted_price", 0) > 0:
             st.rerun()
 
 # ========================================================
-# ========================================================
 # KOŠÍK + PDF + ULOŽENIE DO SHEETU
 # ========================================================
 
@@ -720,7 +672,6 @@ def vytvor_cp_riadok():
         "Cena položky spolu (€)": cena_polozky_spolu,
     }
 
-
 # Tlačidlo "Pridať do košíka"
 with cols[7]:
     can_add = (
@@ -730,10 +681,12 @@ with cols[7]:
     )
     if st.button("🧺 Pridať do košíka", disabled=not can_add):
         st.session_state.kosik.append(vytvor_cp_riadok())
+        # Reset predikcií aj snapshotu po pridaní do košíka
         st.session_state.predicted_time = 0.0
         st.session_state.time_confirmed = False
         st.session_state.predicted_price = 0.0
         st.session_state.price_confirmed = False
+        st.session_state.last_inputs_snapshot = {}
         st.success("Položka bola pridaná do košíka.")
         st.rerun()
 
@@ -791,14 +744,14 @@ def generate_customer_pdf(kosik, cp_nazov, date, zakaznik, krajina, note_text, t
     y -= 14
     c.setFont("Helvetica", 10)
 
-    for r in kosik:
+    for row in kosik:
         if y < 120:
             c.showPage()
             y = height - 40
-        c.drawString(40, y, r["ITEM"])
-        c.drawString(220, y, str(r["Počet kusov"]))
-        c.drawString(280, y, f"{round(r['Jednotková cena (€/ks)'], 2)} €")
-        c.drawString(370, y, f"{round(r['Cena položky spolu (€)'], 2)} €")
+        c.drawString(40, y, row["ITEM"])
+        c.drawString(220, y, str(row["Počet kusov"]))
+        c.drawString(280, y, f"{round(row['Jednotková cena (€/ks)'], 2)} €")
+        c.drawString(370, y, f"{round(row['Cena položky spolu (€)'], 2)} €")
         y -= 14
 
     y -= 10
@@ -824,12 +777,6 @@ def generate_customer_pdf(kosik, cp_nazov, date, zakaznik, krajina, note_text, t
     return buffer
 
 
-# ========================================================
-# INTERNÉ PDF – TABUĽKA (VARIANTA B)
-# ========================================================
-
-from reportlab.lib.pagesizes import landscape
-
 def generate_internal_pdf(kosik, cp_nazov, date, zakaznik, krajina, total_price):
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=landscape(A4))
@@ -846,7 +793,6 @@ def generate_internal_pdf(kosik, cp_nazov, date, zakaznik, krajina, total_price)
     c.drawString(40, y, f"Customer: {zakaznik}   Country: {krajina}")
     y -= 20
 
-    # Hlavička tabuľky
     c.setFont("Helvetica-Bold", 8)
     headers = [
         "ITEM", "Qty", "Tvar", "D/DP", "L/S", "V",
@@ -861,7 +807,7 @@ def generate_internal_pdf(kosik, cp_nazov, date, zakaznik, krajina, total_price)
 
     c.setFont("Helvetica", 8)
 
-    for r in kosik:
+    for row in kosik:
         if y < 60:
             c.showPage()
             y = height - 40
@@ -871,25 +817,24 @@ def generate_internal_pdf(kosik, cp_nazov, date, zakaznik, krajina, total_price)
             y -= 12
             c.setFont("Helvetica", 8)
 
-        row = [
-            r["ITEM"],
-            str(r["Počet kusov"]),
-            r["Tvar"],
-            str(r["Rozmer D / DP"]),
-            str(r["Rozmer L / S"]),
-            str(r["Rozmer V"]),
-            str(r["J.cena materiálu (€/bm)"]),
-            str(r["Náklad materiál (€/ks)"]),
-            str(r["Náklad kooperácia (€/ks)"]),
-            str(r["Vstupné náklady (€/ks)"]),
-            str(r["Čas (min)"]),
-            str(r["Jednotková cena (€/ks)"]),
-            str(r["Cena položky spolu (€)"]),
+        cells = [
+            row["ITEM"],
+            str(row["Počet kusov"]),
+            row["Tvar"],
+            str(row["Rozmer D / DP"]),
+            str(row["Rozmer L / S"]),
+            str(row["Rozmer V"]),
+            str(row["J.cena materiálu (€/bm)"]),
+            str(row["Náklad materiál (€/ks)"]),
+            str(row["Náklad kooperácia (€/ks)"]),
+            str(row["Vstupné náklady (€/ks)"]),
+            str(row["Čas (min)"]),
+            str(row["Jednotková cena (€/ks)"]),
+            str(row["Cena položky spolu (€)"]),
         ]
 
-        for x, cell in zip(x_positions, row):
+        for x, cell in zip(x_positions, cells):
             c.drawString(x, y, cell)
-
         y -= 12
 
     y -= 16
@@ -901,68 +846,42 @@ def generate_internal_pdf(kosik, cp_nazov, date, zakaznik, krajina, total_price)
     buffer.seek(0)
     return buffer
 
+
 # ========================================================
-# ========================================================
-# JEDNO TLAČIDLO – ULOŽIŤ CP + STIAHNUŤ ZIP
+# ULOŽIŤ CP + STIAHNUŤ ZIP
 # ========================================================
 
-import zipfile
-
-# Poistka – ak by sa session_state resetol
 if "kosik" not in st.session_state:
     st.session_state.kosik = []
 
 if st.session_state.kosik:
+    df_kosik_export = pd.DataFrame(st.session_state.kosik)
+    total_price_export = df_kosik_export["Cena položky spolu (€)"].sum()
 
-    def prepare_zip() -> io.BytesIO | None:
-        # Uloženie CP do Google Sheet
+    pdf_customer = generate_customer_pdf(
+        st.session_state.kosik, cp_nazov, date, vybrany,
+        krajina_input, st.session_state.note_text, total_price_export
+    )
+    pdf_internal = generate_internal_pdf(
+        st.session_state.kosik, cp_nazov, date, vybrany,
+        krajina_input, total_price_export
+    )
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+        zipf.writestr(f"{cp_nazov}_customer.pdf", pdf_customer.getvalue())
+        zipf.writestr(f"{cp_nazov}_internal.pdf", pdf_internal.getvalue())
+    zip_buffer.seek(0)
+
+    # Jedno tlačidlo – uloží do Sheetu aj stiahne ZIP
+    if st.download_button(
+        label="💾 Uložiť CP + stiahnuť ZIP",
+        data=zip_buffer,
+        file_name=f"{cp_nazov}_PDF_balík.zip",
+        mime="application/zip"
+    ):
         r = requests.post(CP_APP_SCRIPT_URL, json=st.session_state.kosik)
-        if r.status_code != 200:
+        if r.status_code == 200:
+            st.success("CP bola uložená do Google Sheet.")
+        else:
             st.error("Chyba pri ukladaní ponuky do Google Sheet.")
-            return None
-
-        # Výpočet celkovej ceny
-        df_kosik = pd.DataFrame(st.session_state.kosik)
-        total_price = df_kosik["Cena položky spolu (€)"].sum()
-
-        # PDF pre zákazníka
-        pdf_customer = generate_customer_pdf(
-            st.session_state.kosik,
-            cp_nazov,
-            date,
-            vybrany,
-            krajina_input,
-            st.session_state.note_text,
-            total_price
-        )
-
-        # Interné PDF
-        pdf_internal = generate_internal_pdf(
-            st.session_state.kosik,
-            cp_nazov,
-            date,
-            vybrany,
-            krajina_input,
-            total_price
-        )
-
-        # Vytvorenie ZIP balíka
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
-            zipf.writestr(f"{cp_nazov}_customer.pdf", pdf_customer.getvalue())
-            zipf.writestr(f"{cp_nazov}_internal.pdf", pdf_internal.getvalue())
-
-        zip_buffer.seek(0)
-        return zip_buffer
-
-    zip_data = prepare_zip()
-    if zip_data is not None:
-        st.download_button(
-            label="💾 Uložiť CP + stiahnuť ZIP",
-            data=zip_data,
-            file_name=f"{cp_nazov}_PDF_balík.zip",
-            mime="application/zip"
-        )
-
-
-
